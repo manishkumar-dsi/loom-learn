@@ -1,0 +1,45 @@
+name: loom_learn
+description: A ChatGPT-like learning app with linked virtual pages for deep exploration.
+version: 1.0.0+1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.4.9
+
+  # Secure key storage
+  flutter_secure_storage: ^9.0.0
+
+  # Local persistence (conversations stored as JSON)
+  shared_preferences: ^2.2.2
+
+  # HTTP client (supports SSE streaming for OpenAI)
+  http: ^1.2.0
+
+  # Unique IDs
+  uuid: ^4.3.3
+
+  # Markdown rendering for AI responses
+  flutter_markdown: ^0.6.22
+
+  # Smooth animations
+  animations: ^2.0.11
+
+  # Icons
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
