@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../data/models/message.dart';
 import '../providers/chat_provider.dart';
 import '../providers/conversations_provider.dart';
-import '../widgets/chat_input.dart';
-import '../widgets/message_bubble.dart';
-import '../widgets/virtual_page_panel.dart';
+import '../providers/reading_settings_provider.dart';
+import '../widgets/exploration_bottom_sheet.dart';
+import '../widgets/reading_layout/reading_message_view.dart';
+import '../widgets/reading_toolbar_sheet.dart';
+import '../widgets/theme_aware_chat_input.dart';
 
-/// The main chat view for a single [Conversation].
+/// Main chat view for a single [Conversation].
 ///
-/// Renders the root node's messages and layers [VirtualPagePanel]s on top
-/// via a [Stack] as the user explores linked text.
+/// Redesigned with Kindle-inspired UX:
+/// - Reading layout replaces chat bubbles (prose-style, full-width responses)
+/// - "Aa" button in the header opens the typography settings panel
+/// - Virtual page explorations appear as a Kindle X-Ray-style bottom sheet
+///   instead of a full-screen overlay
+/// - Dynamic theme applied from [readingThemeProvider]
 class ChatScreen extends ConsumerStatefulWidget {
   final String conversationId;
 
@@ -27,7 +32,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 350),
@@ -45,6 +51,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final rt = ref.watch(readingThemeProvider);
+    final settings = ref.watch(readingSettingsProvider);
     final chatState = ref.watch(chatProvider(widget.conversationId));
     final chatNotifier =
         ref.read(chatProvider(widget.conversationId).notifier);
@@ -55,141 +63,156 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .getConversation(widget.conversationId);
 
     final rootNode = conv?.nodes[rootNodeId];
-    final messages = rootNode?.messages
-            .where((m) => m.role != MessageRole.system)
-            .toList() ??
-        [];
+    final messages = rootNode?.messages ?? [];
+    final hasMessages =
+        messages.any((m) => m.role != MessageRole.system);
 
-    return Stack(
-      children: [
-        // ── Root chat ────────────────────────────────────────────────────
-        Column(
-          children: [
-            // Header
-            _ChatHeader(
-              title: conv?.title ?? 'New Chat',
-              conversationId: widget.conversationId,
-            ),
-            const Divider(height: 1),
+    // The bottom sheet exploration is open when nodeStack has depth > 1
+    final explorationOpen = chatState.nodeStack.length > 1;
 
-            // Error banner
-            if (chatState.error != null) _ErrorBanner(chatState.error!),
+    return Container(
+      color: rt.background,
+      child: Column(
+        children: [
+          // ── Header ──────────────────────────────────────────────────────
+          _ChatHeader(
+            title: conv?.title ?? 'New Chat',
+            conversationId: widget.conversationId,
+            theme: rt,
+          ),
 
-            // Messages
-            Expanded(
-              child: messages.isEmpty
-                  ? _WelcomeView(
-                      onSend: (text) {
-                        chatNotifier.sendMessage(
-                          nodeId: rootNodeId,
-                          userText: text,
-                        );
-                      },
-                    )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: messages.length,
-                      itemBuilder: (_, i) => MessageBubble(
-                        message: messages[i],
-                        onLinkTap: (childNodeId) {
-                          chatNotifier.pushVirtualPage(childNodeId);
-                        },
-                        onAskAI: (text, start, end, msgId) {
-                          chatNotifier.exploreText(
-                            parentNodeId: rootNodeId,
-                            sourceMessageId: msgId,
-                            triggerText: text,
-                            startOffset: start,
-                            endOffset: end,
+          Divider(height: 1, color: rt.border),
+
+          // ── Error banner ─────────────────────────────────────────────────
+          if (chatState.error != null)
+            _ErrorBanner(message: chatState.error!, theme: rt),
+
+          // ── Messages + exploration sheet ──────────────────────────────────
+          Expanded(
+            child: Stack(
+              children: [
+                // Root messages
+                hasMessages
+                    ? SingleChildScrollView(
+                        controller: _scrollController,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: MediaQuery.of(context).size.height,
+                            maxWidth: 860,
+                          ),
+                          child: ReadingMessageView(
+                            messages: messages,
+                            settings: settings,
+                            theme: rt,
+                            onLinkTap: chatNotifier.pushVirtualPage,
+                            onAskAI: (text, start, end, msgId) {
+                              chatNotifier.exploreText(
+                                parentNodeId: rootNodeId,
+                                sourceMessageId: msgId,
+                                triggerText: text,
+                                startOffset: start,
+                                endOffset: end,
+                              );
+                              _scrollToBottom();
+                            },
+                          ),
+                        ),
+                      )
+                    : _WelcomeView(
+                        theme: rt,
+                        onSend: (text) {
+                          chatNotifier.sendMessage(
+                            nodeId: rootNodeId,
+                            userText: text,
                           );
                         },
                       ),
+
+                // Exploration bottom sheet overlay
+                if (explorationOpen) ...[
+                  // Scrim (dim the reading area behind the sheet)
+                  GestureDetector(
+                    onTap: chatNotifier.popVirtualPage,
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.3),
                     ),
-            ),
+                  ),
 
-            // Input (only shown when no virtual page is open at root)
-            if (chatState.nodeStack.length == 1)
-              ChatInput(
-                isStreaming: chatState.isStreaming,
-                onSend: (text) {
-                  chatNotifier.sendMessage(
-                    nodeId: rootNodeId,
-                    userText: text,
-                  );
-                  _scrollToBottom();
-                },
-              ),
-          ],
-        ),
-
-        // ── Virtual page layers ─────────────────────────────────────────
-        if (chatState.nodeStack.length > 1) ...[
-          // Dimmed backdrop
-          GestureDetector(
-            onTap: chatNotifier.popVirtualPage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              color: Colors.black.withValues(alpha: 0.4),
+                  // The Kindle X-Ray bottom sheet
+                  ExplorationBottomSheet(
+                    conversationId: widget.conversationId,
+                    nodeStack: chatState.nodeStack,
+                    onLinkTap: chatNotifier.pushVirtualPage,
+                  ),
+                ],
+              ],
             ),
           ),
 
-          // The virtual page panel
-          Positioned.fill(
-            child: VirtualPagePanel(
-              conversationId: widget.conversationId,
-              nodeStack: chatState.nodeStack,
-              onBack: chatNotifier.popVirtualPage,
-              onCrumbTap: (index) {
-                // Pop back to that crumb level
-                final target = chatState.nodeStack[index];
-                final targetIndex = chatState.nodeStack.indexOf(target);
-                for (var i = chatState.nodeStack.length - 1;
-                    i > targetIndex;
-                    i--) {
-                  chatNotifier.popVirtualPage();
-                }
-              },
-              onLinkTap: (childNodeId) {
-                chatNotifier.pushVirtualPage(childNodeId);
+          // ── Chat input (only visible when no exploration sheet is open) ──
+          if (!explorationOpen)
+            ThemeAwareChatInput(
+              theme: rt,
+              isStreaming: chatState.isStreaming,
+              hintText: 'Ask anything to start reading…',
+              onSend: (text) {
+                chatNotifier.sendMessage(
+                  nodeId: rootNodeId,
+                  userText: text,
+                );
+                _scrollToBottom();
               },
             ),
-          ),
         ],
-      ],
+      ),
     );
   }
 }
 
-// ── Chat header ───────────────────────────────────────────────────────────────
+// ── Chat Header ───────────────────────────────────────────────────────────────
 
 class _ChatHeader extends ConsumerWidget {
   final String title;
   final String conversationId;
+  final dynamic theme; // ReadingThemeData
 
-  const _ChatHeader({required this.title, required this.conversationId});
+  const _ChatHeader({
+    required this.title,
+    required this.conversationId,
+    required this.theme,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final rt = theme;
+    final conv = ref
+        .watch(conversationsProvider)
+        .conversations
+        .where((c) => c.id == conversationId)
+        .firstOrNull;
+    final nodeCount = conv?.nodes.length ?? 1;
+
     return Container(
       height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: AppColors.surface,
+      color: rt.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          // Mobile: hamburger to open drawer
+          // Drawer / sidebar toggle on mobile
           if (MediaQuery.of(context).size.width < 700)
             IconButton(
-              icon: const Icon(Icons.menu_rounded, size: 20),
-              color: AppColors.textSecondary,
+              icon: Icon(Icons.menu_rounded, size: 20, color: rt.textSecondary),
               onPressed: () => Scaffold.of(context).openDrawer(),
-            ),
+            )
+          else
+            const SizedBox(width: 8),
 
+          // Conversation title
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: rt.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -197,123 +220,178 @@ class _ChatHeader extends ConsumerWidget {
             ),
           ),
 
-          // Node graph indicator
-          _GraphBadge(conversationId: conversationId),
+          // Exploration graph badge (node count)
+          if (nodeCount > 1)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: '$nodeCount exploration pages',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: rt.linkSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: rt.link.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.account_tree_outlined,
+                          size: 11, color: rt.link),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$nodeCount',
+                        style: TextStyle(
+                          color: rt.link,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Aa — Reading settings
+          IconButton(
+            tooltip: 'Reading settings',
+            icon: Text(
+              'Aa',
+              style: TextStyle(
+                color: rt.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.3,
+              ),
+            ),
+            onPressed: () => showReadingToolbar(context),
+          ),
         ],
       ),
     );
   }
 }
 
-class _GraphBadge extends ConsumerWidget {
-  final String conversationId;
-
-  const _GraphBadge({required this.conversationId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final conv = ref
-        .watch(conversationsProvider)
-        .conversations
-        .where((c) => c.id == conversationId)
-        .firstOrNull;
-
-    final nodeCount = conv?.nodes.length ?? 1;
-    if (nodeCount <= 1) return const SizedBox.shrink();
-
-    return Tooltip(
-      message: '$nodeCount exploration pages in this chat',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.linkSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: AppColors.link.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.account_tree_outlined,
-              size: 12,
-              color: AppColors.link,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '$nodeCount',
-              style: const TextStyle(
-                color: AppColors.link,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Welcome / empty state ─────────────────────────────────────────────────────
+// ── Welcome View ──────────────────────────────────────────────────────────────
 
 class _WelcomeView extends StatelessWidget {
+  final dynamic theme; // ReadingThemeData
   final void Function(String) onSend;
 
-  const _WelcomeView({required this.onSend});
+  const _WelcomeView({required this.theme, required this.onSend});
 
   static const _suggestions = [
-    'Explain quantum entanglement',
-    'How does the internet work?',
-    'What is machine learning?',
-    'Summarise the history of Rome',
+    ('Explain quantum entanglement', Icons.science_outlined),
+    ('How does the internet work?', Icons.lan_outlined),
+    ('What is machine learning?', Icons.psychology_outlined),
+    ('Summarise the history of Rome', Icons.history_edu_outlined),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final rt = theme;
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Logo mark
+            // ── Logo ────────────────────────────────────────────────────
             Container(
-              width: 64,
-              height: 64,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
-                gradient: AppColors.accentGradient,
-                borderRadius: BorderRadius.circular(16),
+                gradient: rt.accentGradient,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: rt.accent.withValues(alpha: 0.3),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: const Icon(
-                Icons.auto_awesome_rounded,
+                Icons.auto_stories_rounded,
                 color: Colors.white,
-                size: 32,
+                size: 34,
               ),
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 24),
+
             Text(
               'What would you like to explore?',
-              style: Theme.of(context).textTheme.headlineMedium,
+              style: TextStyle(
+                color: rt.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 10),
+
             Text(
-              'Ask anything. Select any word or phrase in responses\nto dive deeper with linked exploration pages.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: AppColors.textMuted),
+              'Ask anything. Select words in responses to dive deeper\nwith linked exploration pages — like Kindle X-Ray.',
+              style: TextStyle(
+                color: rt.textMuted,
+                fontSize: 14,
+                height: 1.6,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: _suggestions
-                  .map((s) => _SuggestionChip(text: s, onTap: () => onSend(s)))
-                  .toList(),
+
+            const SizedBox(height: 36),
+
+            // ── Suggestion cards ─────────────────────────────────────────
+            Column(
+              children: _suggestions.map((s) {
+                final (text, icon) = s;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: () => onSend(text),
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: rt.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: rt.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(icon, size: 18, color: rt.accent),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              text,
+                              style: TextStyle(
+                                color: rt.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: rt.textDisabled,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ],
         ),
@@ -322,60 +400,29 @@ class _WelcomeView extends StatelessWidget {
   }
 }
 
-class _SuggestionChip extends StatelessWidget {
-  final String text;
-  final VoidCallback onTap;
-
-  const _SuggestionChip({required this.text, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Error banner ──────────────────────────────────────────────────────────────
+// ── Error Banner ──────────────────────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
+  final dynamic theme; // ReadingThemeData
 
-  const _ErrorBanner(this.message);
+  const _ErrorBanner({required this.message, required this.theme});
 
   @override
   Widget build(BuildContext context) {
+    final rt = theme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.errorSurface,
+      color: rt.errorSurface,
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 16, color: AppColors.error),
+          Icon(Icons.error_outline_rounded, size: 16, color: rt.error),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: AppColors.error,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: rt.error, fontSize: 13),
             ),
           ),
         ],

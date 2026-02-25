@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/reading_theme.dart';
 import '../providers/api_key_provider.dart';
+import '../providers/reading_settings_provider.dart';
 
-/// Screen for configuring the OpenAI API key and model selection.
-///
-/// All data is stored client-side only — the key is written to the OS
-/// secure enclave and never leaves the device.
+/// API key + model selection settings screen.
+/// Fully theme-aware via [readingThemeProvider].
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -32,8 +31,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    final current = ref.read(settingsProvider).apiKey ?? '';
-    _keyController = TextEditingController(text: current);
+    _keyController =
+        TextEditingController(text: ref.read(settingsProvider).apiKey ?? '');
   }
 
   @override
@@ -42,7 +41,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _saveKey() async {
+  Future<void> _saveKey(ReadingThemeData rt) async {
     setState(() => _saving = true);
     await ref
         .read(settingsProvider.notifier)
@@ -50,36 +49,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _saving = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('API key saved'),
-          backgroundColor: AppColors.success,
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: const Text('API key saved'),
+          backgroundColor: rt.success,
+          duration: const Duration(seconds: 2),
         ),
       );
     }
   }
 
-  Future<void> _clearKey() async {
+  Future<void> _clearKey(ReadingThemeData rt) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
-        title: const Text(
+        backgroundColor: rt.surfaceElevated,
+        title: Text(
           'Remove API key?',
-          style: TextStyle(color: AppColors.textPrimary),
+          style: TextStyle(color: rt.textPrimary),
         ),
-        content: const Text(
+        content: Text(
           'This will remove your key from this device. '
           'You will need to re-enter it to use the app.',
-          style: TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: rt.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: rt.textMuted)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            style: FilledButton.styleFrom(backgroundColor: rt.error),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Remove'),
           ),
@@ -94,45 +93,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.watch(settingsProvider);
+    final apiSettings = ref.watch(settingsProvider);
+    final rt = ref.watch(readingThemeProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: rt.background,
       appBar: AppBar(
         title: const Text('Settings'),
+        backgroundColor: rt.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: Icon(Icons.arrow_back_rounded, color: rt.textSecondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // ── API Key section ─────────────────────────────────────────
-          _SectionHeader(title: 'OpenAI API Key'),
+          // ── API Key ───────────────────────────────────────────────────
+          _SectionHeader(label: 'OpenAI API Key', theme: rt),
           const SizedBox(height: 8),
           _InfoBanner(
             icon: Icons.lock_outline_rounded,
             message:
                 'Your key is stored securely on this device only. '
                 'It is never sent anywhere except directly to OpenAI.',
+            theme: rt,
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _keyController,
             obscureText: _obscure,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontFamily: 'monospace',
+            style: TextStyle(
+              color: rt.textPrimary,
+              fontFamily: 'Courier New',
               fontSize: 14,
             ),
             decoration: InputDecoration(
-              hintText: 'sk-••••••••••••••••••••••••••••••••',
-              prefixIcon: const Icon(
-                Icons.vpn_key_rounded,
-                color: AppColors.textMuted,
-                size: 18,
-              ),
+              hintText: 'sk-••••••••••••••••••••••••••••',
+              hintStyle: TextStyle(color: rt.textMuted),
+              prefixIcon: Icon(Icons.vpn_key_rounded,
+                  color: rt.textMuted, size: 18),
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -142,18 +142,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined,
                       size: 18,
-                      color: AppColors.textMuted,
+                      color: rt.textMuted,
                     ),
                     onPressed: () => setState(() => _obscure = !_obscure),
-                    tooltip: _obscure ? 'Show key' : 'Hide key',
+                    tooltip: _obscure ? 'Show' : 'Hide',
                   ),
                   if (_keyController.text.isNotEmpty)
                     IconButton(
-                      icon: const Icon(
-                        Icons.copy_rounded,
-                        size: 16,
-                        color: AppColors.textMuted,
-                      ),
+                      icon: Icon(Icons.copy_rounded,
+                          size: 16, color: rt.textMuted),
                       onPressed: () {
                         Clipboard.setData(
                             ClipboardData(text: _keyController.text));
@@ -186,20 +183,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   label: Text(_saving ? 'Saving…' : 'Save Key'),
                   onPressed:
                       _keyController.text.trim().isNotEmpty && !_saving
-                          ? _saveKey
+                          ? () => _saveKey(rt)
                           : null,
                 ),
               ),
-              if (settings.hasApiKey) ...[
+              if (apiSettings.hasApiKey) ...[
                 const SizedBox(width: 10),
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  icon: const Icon(
+                      Icons.delete_outline_rounded, size: 18),
                   label: const Text('Remove'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
+                    foregroundColor: rt.error,
+                    side: BorderSide(color: rt.error),
                   ),
-                  onPressed: _clearKey,
+                  onPressed: () => _clearKey(rt),
                 ),
               ],
             ],
@@ -207,19 +205,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const SizedBox(height: 32),
 
-          // ── Model section ───────────────────────────────────────────
-          _SectionHeader(title: 'Model'),
+          // ── Model ─────────────────────────────────────────────────────
+          _SectionHeader(label: 'Model', theme: rt),
           const SizedBox(height: 8),
           Text(
             'Select the model used for all conversations.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AppColors.textMuted),
+            style: TextStyle(color: rt.textMuted, fontSize: 13),
           ),
           const SizedBox(height: 12),
           ..._models.map((model) {
-            final isSelected = settings.model == model;
+            final isSelected = apiSettings.model == model;
             return GestureDetector(
               onTap: () =>
                   ref.read(settingsProvider.notifier).setModel(model),
@@ -230,13 +225,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppColors.accentSurface
-                      : AppColors.surfaceElevated,
+                      ? rt.accentSurface
+                      : rt.surfaceElevated,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isSelected
-                        ? AppColors.accent.withValues(alpha: 0.5)
-                        : AppColors.border,
+                        ? rt.accent.withValues(alpha: 0.5)
+                        : rt.border,
                   ),
                 ),
                 child: Row(
@@ -246,19 +241,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ? Icons.radio_button_checked_rounded
                           : Icons.radio_button_unchecked_rounded,
                       size: 18,
-                      color: isSelected
-                          ? AppColors.accentLight
-                          : AppColors.textMuted,
+                      color: isSelected ? rt.accentLight : rt.textMuted,
                     ),
                     const SizedBox(width: 10),
                     Text(
                       model,
                       style: TextStyle(
-                        fontFamily: 'monospace',
+                        fontFamily: 'Courier New',
                         fontSize: 13,
                         color: isSelected
-                            ? AppColors.accentLight
-                            : AppColors.textSecondary,
+                            ? rt.accentLight
+                            : rt.textSecondary,
                         fontWeight: isSelected
                             ? FontWeight.w600
                             : FontWeight.w400,
@@ -266,7 +259,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const Spacer(),
                     if (_modelBadge(model) != null)
-                      _Badge(label: _modelBadge(model)!),
+                      _Badge(
+                        label: _modelBadge(model)!,
+                        theme: rt,
+                      ),
                   ],
                 ),
               ),
@@ -275,17 +271,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const SizedBox(height: 32),
 
-          // ── Data section ───────────────────────────────────────────
-          _SectionHeader(title: 'Data & Privacy'),
+          // ── Data & Privacy ────────────────────────────────────────────
+          _SectionHeader(label: 'Data & Privacy', theme: rt),
           const SizedBox(height: 8),
           _InfoBanner(
             icon: Icons.storage_rounded,
             message:
                 'All conversations are stored locally on your device. '
-                'No data is sent to any external server other than OpenAI.',
-            color: AppColors.accentSurface,
-            borderColor: AppColors.accent.withValues(alpha: 0.3),
-            iconColor: AppColors.accentLight,
+                'No data is sent to any server other than OpenAI.',
+            theme: rt,
+            color: rt.accentSurface,
+            borderColor: rt.accent.withValues(alpha: 0.3),
+            iconColor: rt.accentLight,
           ),
         ],
       ),
@@ -299,19 +296,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-// ── Helper widgets ────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
-  final String title;
+  final String label;
+  final ReadingThemeData theme;
 
-  const _SectionHeader({required this.title});
+  const _SectionHeader({required this.label, required this.theme});
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      title.toUpperCase(),
-      style: const TextStyle(
-        color: AppColors.textMuted,
+      label.toUpperCase(),
+      style: TextStyle(
+        color: theme.textMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1,
@@ -323,37 +321,43 @@ class _SectionHeader extends StatelessWidget {
 class _InfoBanner extends StatelessWidget {
   final IconData icon;
   final String message;
-  final Color color;
-  final Color borderColor;
-  final Color iconColor;
+  final ReadingThemeData theme;
+  final Color? color;
+  final Color? borderColor;
+  final Color? iconColor;
 
   const _InfoBanner({
     required this.icon,
     required this.message,
-    this.color = AppColors.linkSurface,
-    this.borderColor = const Color(0xFF164152),
-    this.iconColor = AppColors.link,
+    required this.theme,
+    this.color,
+    this.borderColor,
+    this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bg = color ?? theme.linkSurface;
+    final border = borderColor ?? theme.link.withValues(alpha: 0.3);
+    final iconCol = iconColor ?? theme.link;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color,
+        color: bg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: iconColor),
+          Icon(icon, size: 16, color: iconCol),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 13,
                 height: 1.5,
               ),
@@ -367,21 +371,22 @@ class _InfoBanner extends StatelessWidget {
 
 class _Badge extends StatelessWidget {
   final String label;
+  final ReadingThemeData theme;
 
-  const _Badge({required this.label});
+  const _Badge({required this.label, required this.theme});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: AppColors.accentDim,
+        color: theme.accentDim,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.accentLight,
+        style: TextStyle(
+          color: theme.accentLight,
           fontSize: 10,
           fontWeight: FontWeight.w600,
         ),

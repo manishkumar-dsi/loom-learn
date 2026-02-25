@@ -1,18 +1,14 @@
 # CLAUDE.md — loom-learn
 
-Guidance for AI assistants working on **loom-learn**: a Flutter-based ChatGPT-style learning application with linked virtual-page exploration.
+Guidance for AI assistants working on **loom-learn**: a Flutter-based reading-first learning app backed by the OpenAI API, with Kindle-inspired UI/UX and linked virtual-page exploration.
 
 ---
 
 ## What Is Loom Learn?
 
-**Loom Learn** is a mobile-first (iOS/Android) chat application backed by the OpenAI API. Its defining feature is **linked exploration**: when reading an AI response, the user can select any word or phrase to spawn a contextual "virtual page" — a child conversation that dives into that topic. Virtual pages can nest arbitrarily deep, forming a knowledge graph. All data, including the API key, stays on the device.
+**Loom Learn** is a mobile-first (iOS/Android) chat application backed by the OpenAI API. Its defining feature is **linked exploration**: when reading an AI response, the user can select any word or phrase to spawn a contextual "virtual page" — a child conversation that dives deeper into that topic. Virtual pages can nest arbitrarily deep, forming a knowledge graph. All data stays on the device.
 
-Key differentiators from ChatGPT:
-1. **Linked exploration** — text selection creates navigable child pages.
-2. **Conversation graph** — conversations are trees of nodes, not linear threads.
-3. **Client-only storage** — no backend; API key in OS secure enclave; conversations in SharedPreferences as JSON.
-4. **Refined dark UI** — violet/cyan palette, richer typography and animations.
+**Design philosophy:** The reading experience is primary. Every UI decision borrows from Kindle — typography is king, distractions are removed during reading, and information is revealed progressively.
 
 ---
 
@@ -20,218 +16,234 @@ Key differentiators from ChatGPT:
 
 ```
 loom-learn/
-├── CLAUDE.md                          # This file
-├── pubspec.yaml                       # Flutter project config & dependencies
-├── assets/                            # Static assets (images, fonts if added)
-├── test/
-│   └── widget_test.dart               # Unit tests for data models
+├── CLAUDE.md
+├── pubspec.yaml
+├── assets/
+├── test/widget_test.dart
 └── lib/
-    ├── main.dart                      # Entry point — bootstraps SharedPreferences, ProviderScope
-    ├── app.dart                       # LoomLearnApp (MaterialApp, theme, HomeScreen)
+    ├── main.dart                          # Bootstrap: SharedPreferences, ProviderScope
+    ├── app.dart                           # ConsumerWidget; watches readingThemeProvider
+    │                                      # → MaterialApp re-themes on every mode change
     ├── core/
     │   ├── theme/
-    │   │   ├── app_colors.dart        # Full colour palette (AppColors constants)
-    │   │   └── app_theme.dart         # ThemeData (dark theme)
+    │   │   ├── app_colors.dart            # Legacy static dark-mode constants (avoid in new code)
+    │   │   ├── app_theme.dart             # Legacy ThemeData (superseded by ReadingThemeData)
+    │   │   └── reading_theme.dart         # ★ ReadingThemeData: 4 presets (white/sepia/dark/night)
     │   ├── services/
-    │   │   ├── openai_service.dart    # OpenAI Chat Completions API (SSE streaming)
-    │   │   └── storage_service.dart   # SharedPreferences + FlutterSecureStorage wrapper
-    │   └── utils/
-    │       └── id_generator.dart      # UUID v4 factory
+    │   │   ├── openai_service.dart        # SSE streaming via http.Client
+    │   │   └── storage_service.dart       # SharedPreferences + FlutterSecureStorage
+    │   └── utils/id_generator.dart        # UUID v4
     ├── data/
     │   ├── models/
-    │   │   ├── message.dart           # Message (role, content, links, isStreaming)
-    │   │   ├── text_link.dart         # TextLink (trigger text → child node id)
-    │   │   ├── conversation_node.dart # ConversationNode (a single "page")
-    │   │   └── conversation.dart      # Conversation (root + node graph)
+    │   │   ├── reading_settings.dart      # ★ ReadingSettings: theme, font, spacing, margins
+    │   │   ├── message.dart               # Message (role, content, links, isStreaming)
+    │   │   ├── text_link.dart             # TextLink → child node
+    │   │   ├── conversation_node.dart     # ConversationNode (a reading page)
+    │   │   └── conversation.dart          # Conversation (root + node graph)
     │   └── repositories/
     │       └── conversation_repository.dart  # All CRUD + virtual-page creation
-    ├── presentation/
-    │   ├── providers/
-    │   │   ├── storage_provider.dart         # SharedPreferences + StorageService providers
-    │   │   ├── api_key_provider.dart         # SettingsState / SettingsNotifier
-    │   │   ├── conversations_provider.dart   # ConversationsState / ConversationsNotifier
-    │   │   └── chat_provider.dart            # NodeChatState / ChatNotifier (per conversation)
-    │   ├── screens/
-    │   │   ├── home_screen.dart       # Adaptive root layout (drawer vs split-view)
-    │   │   ├── chat_screen.dart       # Chat view + virtual-page stack overlay
-    │   │   └── settings_screen.dart   # API key + model selection
-    │   └── widgets/
-    │       ├── app_sidebar.dart        # Conversation list sidebar
-    │       ├── message_bubble.dart     # User / assistant message rendering
-    │       ├── linked_text_widget.dart # SelectableText.rich with tappable link spans
-    │       ├── chat_input.dart         # Compose bar (multi-line, Enter-to-send)
-    │       ├── virtual_page_panel.dart # Sliding exploration page overlay
-    │       ├── breadcrumb_bar.dart     # Navigation breadcrumb for virtual pages
-    │       └── typing_indicator.dart   # Animated 3-dot loader
+    └── presentation/
+        ├── providers/
+        │   ├── storage_provider.dart              # SharedPreferences injection
+        │   ├── api_key_provider.dart              # SettingsState (API key + model)
+        │   ├── conversations_provider.dart        # Conversation list + active id
+        │   ├── chat_provider.dart                 # Per-conversation state + nodeStack
+        │   └── reading_settings_provider.dart     # ★ ReadingSettingsNotifier + readingThemeProvider
+        ├── screens/
+        │   ├── home_screen.dart           # Adaptive layout (drawer / sidebar)
+        │   ├── chat_screen.dart           # ★ Kindle reading view + Aa button + bottom sheet
+        │   └── settings_screen.dart       # API key + model (fully theme-aware)
+        └── widgets/
+            ├── app_sidebar.dart                   # Conversation list (theme-aware)
+            ├── theme_aware_chat_input.dart         # ★ Input bar using ReadingThemeData
+            ├── reading_toolbar_sheet.dart          # ★ "Aa" bottom sheet (font/theme/spacing)
+            ├── exploration_bottom_sheet.dart       # ★ Kindle X-Ray virtual page bottom sheet
+            ├── reading_layout/
+            │   ├── reading_message_view.dart       # ★ Top-level reading layout widget
+            │   ├── reading_response_view.dart      # ★ Prose AI response + custom context menu
+            │   └── question_card.dart              # ★ User question styled as annotation card
+            │
+            │   ── Legacy / still used for linked text in older paths ──
+            ├── linked_text_widget.dart
+            ├── message_bubble.dart
+            ├── virtual_page_panel.dart
+            ├── breadcrumb_bar.dart
+            ├── chat_input.dart
+            └── typing_indicator.dart
 ```
 
 ---
 
-## Architecture
+## Kindle-Inspired UX Architecture
 
-### Data Model — Conversation Graph
+### Design Principles (adapted from Kindle)
+
+| Kindle Principle | Loom Learn Implementation |
+|---|---|
+| Typography is king | Configurable font (sans/serif/mono), size (13–24px), line height, margins |
+| 4 reading modes | White, Sepia, Dark, Night — full `ReadingThemeData` per mode |
+| X-Ray for deep reading | Text selection → "Ask AI" → `DraggableScrollableSheet` slides up |
+| Progressive disclosure | "Aa" icon in header opens settings only when needed |
+| Distraction-free layout | AI responses rendered as continuous prose, not chat bubbles |
+| Comfortable reading width | `ConstrainedBox(maxWidth: 860)` prevents over-wide lines |
+| Visual depth cues | Level dots badge (●●●) shows exploration nesting depth |
+| Context strip | "Exploring: 'triggerText'" banner in every virtual page |
+
+### Reading Theme System
+
+```
+ReadingThemeMode (enum)
+  white  → ReadingThemeData.white   (bg #FAFAFA, text #1C1C1E, accent iOS purple)
+  sepia  → ReadingThemeData.sepia   (bg #F8EDD9, text #3D2B1F, accent warm brown)
+  dark   → ReadingThemeData.dark    (bg #131313, text #E8E8E8, accent violet)
+  night  → ReadingThemeData.night   (bg #000000, text #B8B8B8, OLED black)
+
+ReadingThemeData
+  ├── 25 semantic color properties (background, surface, text*, accent*, link*, etc.)
+  ├── questionCardBg/Border  — user question card styling
+  ├── sectionDivider         — ··· ornamental divider between Q&A pairs
+  ├── exploredHighlight      — tint on text that has been linked to a virtual page
+  ├── isDark                 — boolean for icon/overlay decisions
+  ├── systemOverlayStyle     — SystemUiOverlayStyle for status bar
+  └── toMaterialTheme()      — bridges to MaterialApp ThemeData
+```
+
+The `readingThemeProvider` (derived Riverpod `Provider`) maps `ReadingSettings.theme` → `ReadingThemeData`. `app.dart` watches it and calls `readingTheme.toMaterialTheme()` on every change, so the entire app re-themes without restart.
+
+### Reading Layout (vs chat bubbles)
+
+**Old**: User bubble (right) + Assistant bubble (left) with avatar
+**New**: Kindle document layout
+
+```
+[QuestionCard]        ← compact card, "You" label + question text
+[ReadingResponseView] ← full-width prose (MarkdownBody inside SelectionArea)
+  [ExplorationChips]  ← cyan chips listing existing virtual page links
+[SectionDivider]      ← ornamental ··· divider
+[QuestionCard]
+[ReadingResponseView]
+...
+```
+
+Prose rendering uses `MarkdownBody` inside a `SelectionArea` with a custom `contextMenuBuilder` that overlays a `_KindleContextMenu` widget — a floating panel with **Ask AI** (primary, accent-tinted) and **Copy** (secondary).
+
+### Typography Controls ("Aa" Panel)
+
+`showReadingToolbar(context)` opens a `showModalBottomSheet` containing `_ReadingToolbarSheet`:
+
+| Control | Widget | Range / Options |
+|---|---|---|
+| Font Size | `SliderTheme` + `Slider` | 13–24 px (11 divisions) |
+| Typeface | 3-column font preview grid | Sans / Serif (Georgia) / Mono |
+| Line Spacing | 3-segment toggle | Compact 1.45 / Normal 1.70 / Wide 2.05 |
+| Margins | 3-segment toggle | Narrow 16 / Normal 24 / Wide 40 px |
+| Theme | 4 colored "Aa" swatches | White / Sepia / Dark / Night |
+
+All changes persist immediately to `SharedPreferences` via `ReadingSettingsNotifier`.
+
+### Virtual Page = Kindle X-Ray Bottom Sheet
+
+**Old**: `VirtualPagePanel` — full-screen slide from right
+**New**: `ExplorationBottomSheet` — `DraggableScrollableSheet` from bottom
+
+```
+Snap points:  48 % height (peek)  →  100 % height (full screen)
+Drag handle:  36×4 px pill at top
+Header:       ↓ back | 📖 title | ●●● Level N badge
+Context strip: 💬 Exploring: "triggerText" (italic, cyan)
+Body:          ReadingMessageView (same reading layout as main chat)
+Input:         ThemeAwareChatInput (same theme, compact rounded)
+```
+
+When `chatState.nodeStack.length > 1`, `ChatScreen` renders:
+1. A `Container(color: black×0.3)` scrim behind the sheet
+2. `ExplorationBottomSheet` on top (managed by `DraggableScrollableController`)
+
+Navigation back closes the sheet by calling `chatNotifier.popVirtualPage()`.
+
+---
+
+## Data Model — Conversation Graph
 
 ```
 Conversation
-  ├── id, title, rootNodeId
+  ├── id, title, rootNodeId, createdAt, updatedAt
   └── nodes: Map<String, ConversationNode>
-        ├── root node  (parentNodeId = null)
-        └── child nodes (parentNodeId = parent, triggerText = selected text)
-
-ConversationNode
-  ├── id, conversationId, parentNodeId, triggerText, title
-  └── messages: List<Message>
-        └── Message
-              ├── id, role (user|assistant|system), content, timestamp
-              └── links: List<TextLink>
-                    └── TextLink  (triggerText, startOffset, endOffset, childNodeId)
+        ├── root node (parentNodeId = null)
+        └── child nodes (parentNodeId = parent.id, triggerText = selection)
+              └── messages: List<Message>
+                    └── links: List<TextLink>
+                          └── TextLink.childNodeId → child ConversationNode
 ```
 
-- The graph is a **tree** (DAG where each node has at most one parent).
-- All nodes live inside the `Conversation.nodes` map; references use string IDs.
-- `TextLink`s are embedded in assistant `Message`s; they mark which spans of text have been explored and link to child nodes.
+All mutations go through `ConversationRepository`. The repository is the single source of truth.
 
-### State Management — Riverpod
+---
 
-| Provider | Type | Responsibility |
-|---|---|---|
-| `sharedPreferencesProvider` | `Provider<SharedPreferences>` | Overridden at startup in `main.dart` |
-| `storageServiceProvider` | `Provider<StorageService>` | Wraps SharedPreferences + SecureStorage |
-| `conversationRepositoryProvider` | `Provider<ConversationRepository>` | All conversation CRUD |
-| `settingsProvider` | `StateNotifierProvider<SettingsNotifier, SettingsState>` | API key, model selection |
-| `conversationsProvider` | `StateNotifierProvider<ConversationsNotifier, ConversationsState>` | List of conversations, active conversation |
-| `chatProvider(conversationId)` | `StateNotifierProvider.family<ChatNotifier, NodeChatState, String>` | Per-conversation chat state, streaming, virtual-page navigation stack |
+## State Management — Riverpod
 
-### Virtual Page Navigation
-
-`ChatNotifier` owns a `List<String> nodeStack` inside `NodeChatState`. This acts as a navigation stack:
-
-```
-nodeStack = ['root']              → showing main chat
-nodeStack = ['root', 'child1']   → VirtualPagePanel for child1 layered on top
-nodeStack = ['root', 'child1', 'grandchild']  → double-deep exploration
-```
-
-`ChatScreen` renders a `Stack`:
-1. Root chat messages (always present underneath).
-2. If `nodeStack.length > 1`: dimmed backdrop + `VirtualPagePanel` slides in from right via `SlideTransition`.
-
-### OpenAI Streaming (SSE)
-
-`OpenAIService.streamChat` returns a `Stream<String>` of text deltas. It uses `http.Client.send()` with a streamed response, parses the `data: {...}` SSE lines, extracts `choices[0].delta.content`, and yields each token. The `ChatNotifier` accumulates tokens and calls `updateMessageInNode` on every delta so the UI rebuilds incrementally.
-
-### Persistence
-
-| Data | Storage | Location |
-|---|---|---|
-| API key | `FlutterSecureStorage` (OS keychain/keystore) | Encrypted on-device |
-| Model selection | `SharedPreferences` | `selected_model` key |
-| Conversations | `SharedPreferences` | `conversations` key (JSON array) |
-
-Everything is client-side. No backend. No analytics.
+| Provider | Description |
+|---|---|
+| `sharedPreferencesProvider` | Overridden at startup in `main.dart` |
+| `storageServiceProvider` | Wraps SharedPreferences + SecureStorage |
+| `conversationRepositoryProvider` | All conversation CRUD |
+| `settingsProvider` | API key, model selection |
+| `readingSettingsProvider` | Font, theme, spacing, margin — persisted to prefs |
+| `readingThemeProvider` | Derived: `ReadingThemeData` for current theme mode |
+| `conversationsProvider` | List + active conversation |
+| `chatProvider(conversationId)` | Per-conversation: messages, nodeStack, streaming |
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-
-- Flutter SDK ≥ 3.7 (required for `contextMenuBuilder` API)
-- Dart SDK ≥ 3.1
-- An [OpenAI API key](https://platform.openai.com/account/api-keys)
+- Flutter ≥ 3.7 (required for `contextMenuBuilder` + `SelectionArea.contextMenuBuilder`)
+- Dart ≥ 3.1
+- An OpenAI API key
 
 ### Setup
 
 ```bash
-# 1. Install Flutter dependencies
 flutter pub get
-
-# 2. Run on a connected device or emulator
 flutter run
-
-# 3. On first launch, tap the banner or go to Settings → add your OpenAI key
+# First launch → tap the top banner or open Settings → enter your API key
 ```
-
-### Platform notes
-
-- **Android**: `flutter_secure_storage` uses `EncryptedSharedPreferences`.
-- **iOS**: uses the iOS Keychain.
-- **Web**: `flutter_secure_storage` falls back to `localStorage` on web — not recommended for sensitive keys.
 
 ---
 
 ## Development Workflow
 
 ### Branching
+- AI work: `claude/<description>-<session-id>`
+- Never push to `main` without a PR
 
-- Default branch: `main`
-- AI-assisted work: `claude/<description>-<session-id>`
-- Feature work: `feature/<short-description>`
-- Never push to `main` without a PR.
-
-### Commits
-
-- Imperative, scoped: `Add streaming indicator`, `Fix TextLink offset on markdown messages`
-- Reference issues: `Fix #12: breadcrumb renders wrong node title`
-
-### Running Tests
+### Commands
 
 ```bash
-flutter test
-```
-
-Tests live in `test/`. Current coverage: data model serialisation / deserialisation.
-
-### Linting
-
-```bash
-flutter analyze
-```
-
-Config: `analysis_options.yaml` (uses `flutter_lints`). All warnings should be resolved before committing.
-
----
-
-## Commands
-
-```bash
-flutter pub get          # Install / update dependencies
-flutter run              # Run on connected device (debug)
-flutter run --release    # Production build on device
+flutter pub get          # Install dependencies
+flutter run              # Debug on device
+flutter run --release    # Release build
 flutter build apk        # Android APK
-flutter build ios        # iOS (requires macOS + Xcode)
-flutter test             # All tests
-flutter analyze          # Static analysis
+flutter build ios        # iOS (macOS + Xcode required)
+flutter test             # Model serialisation tests
+flutter analyze          # Static analysis (must pass before commit)
 ```
-
----
-
-## Code Style & Conventions
-
-- Dart style guide + `flutter_lints` enforced by `flutter analyze`.
-- `const` constructors everywhere possible.
-- Prefer `final` over `var`.
-- No `dynamic` except in JSON parsing.
-- Widget files: one public widget per file, private helpers below it in the same file.
-- Provider files: one `StateNotifier` + its `StateNotifierProvider` per file.
-- All magic strings → named constants (see `app_colors.dart`, `storage_service.dart`).
-- Never store secrets in source code or `SharedPreferences` in plaintext — always use `FlutterSecureStorage`.
 
 ---
 
 ## Key Conventions for AI Assistants
 
-1. **Read before editing.** Always read a file before modifying it.
-2. **Minimal changes.** Only change what the task requires. Do not refactor adjacent code.
-3. **Maintain the graph model.** All conversation mutations go through `ConversationRepository`. Do not mutate models directly in UI code.
-4. **Streaming correctness.** When appending tokens, always call `updateMessageInNode` (not `addMessageToNode`) for the in-progress message.
-5. **No secrets in code.** API key via `FlutterSecureStorage` only.
-6. **Run `flutter analyze` after changes** to catch type errors and lints before committing.
-7. **Run `flutter test` after changes** to ensure model serialisation is intact.
-8. **No speculative features.** Implement only what is explicitly requested.
-9. **Security first.** Never log or print the API key. Validate user input at widget boundaries.
-10. **Commit on feature branches.** Use the `claude/` branch for AI work.
-11. **Update this file** when adding new dependencies, screens, or architectural patterns.
+1. **Use `ReadingThemeData` for all UI colors** — never use `AppColors.*` in new or modified widgets. The `AppColors` class is legacy; new code accesses theme via `ref.watch(readingThemeProvider)`.
+2. **Read before editing.** Never guess at file contents.
+3. **Minimal changes.** Only change what the task requires.
+4. **Mutations through the repository.** Never mutate models directly in UI code.
+5. **Streaming correctness.** Use `updateMessageInNode` (not `addMessageToNode`) for the in-progress streaming message.
+6. **No secrets in code.** API key via `FlutterSecureStorage` only.
+7. **Run `flutter analyze` after changes** — the CI/CD pipeline will enforce this.
+8. **Run `flutter test` after changes** to verify model serialisation.
+9. **Commit on `claude/` feature branches.**
+10. **Update this file** when adding new features, dependencies, or architectural patterns.
 
 ---
 
@@ -239,30 +251,30 @@ flutter analyze          # Static analysis
 
 | Decision | Rationale |
 |---|---|
-| Riverpod (StateNotifier) over Bloc | Less boilerplate for a solo-dev project; no code generation required |
-| SharedPreferences + JSON over SQLite/Hive | Simplest path, no codegen, sufficient for conversation-size data |
-| FlutterSecureStorage for API key | OS-level encryption; key never stored in plaintext |
-| `Stack` + `SlideTransition` for virtual pages | Full control over animation and z-order; avoids Navigator stack complications |
-| `SelectableText.rich` with `TapGestureRecognizer` for links | Best Flutter 3.7+ approach for mixed selectable + tappable spans |
-| SSE streaming via `http.Client.send` | Official `http` package is sufficient; avoids adding an OpenAI-specific dependency |
-| `family` provider for chat | Clean isolation per conversation; avoids global streaming state collisions |
+| `ReadingThemeData` separate from `ThemeData` | More control; `ThemeData` can be derived on-demand via `toMaterialTheme()` |
+| `DraggableScrollableSheet` for virtual pages | Kindle X-Ray feel; dual snap heights (peek/full); native iOS feel |
+| `SelectionArea` + custom `contextMenuBuilder` | Markdown rendered by `MarkdownBody` (not `SelectableText`); `SelectionArea` wraps it |
+| `ReadingSettingsProvider` separate from `SettingsProvider` | Reading prefs change frequently (live preview); API settings rarely change |
+| `ReadingMessageView` replaces `MessageBubble` | Prose layout more natural for long-form AI answers; matches Kindle document style |
+| Font size via `MarkdownStyleSheet` | All heading/body/code sizes derived from `settings.fontSize` as a multiplier |
+| `ThemeAwareChatInput` separate from `ChatInput` | Input appears in both main chat and virtual page sheet; theme injection via constructor is cleaner than reading a provider inside the widget |
 
 ---
 
 ## Environment Variables
 
-No environment variables are used. The OpenAI API key is entered at runtime in Settings and stored in the OS secure enclave.
+No environment variables. API key entered at runtime in Settings → stored in OS secure enclave.
 
-Do **not** add `.env` files, hardcode keys, or commit any credentials.
+Never commit `.env` files or secrets.
 
 ---
 
 ## CI/CD
 
-Not yet configured. Recommended next steps:
-- GitHub Actions: `flutter test && flutter analyze` on every PR.
-- Fastlane for iOS/Android release distribution.
+Not yet configured. Recommended pipeline:
+- `flutter test && flutter analyze` on every PR
+- Fastlane for iOS/Android release distribution
 
 ---
 
-*Last updated: 2026-02-25*
+*Last updated: 2026-02-25 (Kindle-inspired UI/UX redesign)*
