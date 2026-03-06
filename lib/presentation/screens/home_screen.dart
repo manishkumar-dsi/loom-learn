@@ -33,7 +33,8 @@ class HomeScreen extends ConsumerWidget {
 
     final convState = ref.watch(conversationsProvider);
     final convNotifier = ref.read(conversationsProvider.notifier);
-    final apiSettings = ref.watch(settingsProvider);
+    // Only watch hasApiKey to avoid rebuilding when model changes.
+    final hasApiKey = ref.watch(settingsProvider.select((s) => s.hasApiKey));
 
     // Auto-create first conversation synchronously so we never block on storage
     if (convState.conversations.isEmpty &&
@@ -52,7 +53,7 @@ class HomeScreen extends ConsumerWidget {
         ? _LoadingView(theme: rt)
         : ChatScreen(conversationId: convState.activeConversationId!);
 
-    if (!apiSettings.hasApiKey) {
+    if (!hasApiKey) {
       body = _NoKeyBanner(
         theme: rt,
         onSetup: openSettings,

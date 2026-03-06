@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -206,7 +208,7 @@ List<_Segment> _parseSegments(String content) {
 
 // ── Response Body ─────────────────────────────────────────────────────────────
 
-class _ResponseBody extends StatelessWidget {
+class _ResponseBody extends StatefulWidget {
   final Message message;
   final ReadingSettings settings;
   final ReadingThemeData theme;
@@ -228,45 +230,60 @@ class _ResponseBody extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final segments = _parseSegments(message.content);
+  State<_ResponseBody> createState() => _ResponseBodyState();
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: segments.map((seg) {
-        return switch (seg) {
-          _ProseSegment(:final markdown) => _ProseBlock(
-              markdown: markdown,
-              settings: settings,
-              theme: theme,
-              horizontalMargin: horizontalMargin,
-              messageId: message.id,
-              onLinkTap: onLinkTap,
-              onAskAI: onAskAI,
-              onHighlight: onHighlight,
-              flashHighlightId: flashHighlightId,
-            ),
-          _CodeSegment(:final code, :final language) => Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalMargin,
-                vertical: 4,
+class _ResponseBodyState extends State<_ResponseBody> {
+  List<_Segment> _cachedSegments = const [];
+  String _cachedContent = '';
+
+  @override
+  Widget build(BuildContext context) {
+    // Re-parse only when content actually changes (avoids re-parsing on
+    // unrelated rebuilds like theme or settings changes).
+    if (_cachedContent != widget.message.content) {
+      _cachedContent = widget.message.content;
+      _cachedSegments = _parseSegments(_cachedContent);
+    }
+
+    return RepaintBoundary(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _cachedSegments.map((seg) {
+          return switch (seg) {
+            _ProseSegment(:final markdown) => _ProseBlock(
+                markdown: markdown,
+                settings: widget.settings,
+                theme: widget.theme,
+                horizontalMargin: widget.horizontalMargin,
+                messageId: widget.message.id,
+                onLinkTap: widget.onLinkTap,
+                onAskAI: widget.onAskAI,
+                onHighlight: widget.onHighlight,
+                flashHighlightId: widget.flashHighlightId,
               ),
-              child: _CodeBlock(
-                code: code,
-                language: language,
-                theme: theme,
-                fontSize: settings.fontSize,
+            _CodeSegment(:final code, :final language) => Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.horizontalMargin,
+                  vertical: 4,
+                ),
+                child: _CodeBlock(
+                  code: code,
+                  language: language,
+                  theme: widget.theme,
+                  fontSize: widget.settings.fontSize,
+                ),
               ),
-            ),
-        };
-      }).toList(),
+          };
+        }).toList(),
+      ),
     );
   }
 }
 
 // ── Prose block ───────────────────────────────────────────────────────────────
 
-class _ProseBlock extends StatelessWidget {
+class _ProseBlock extends StatefulWidget {
   final String markdown;
   final ReadingSettings settings;
   final ReadingThemeData theme;
@@ -290,11 +307,32 @@ class _ProseBlock extends StatelessWidget {
   });
 
   @override
+  State<_ProseBlock> createState() => _ProseBlockState();
+}
+
+class _ProseBlockState extends State<_ProseBlock> {
+  MarkdownStyleSheet? _cachedStyleSheet;
+  ReadingSettings? _cachedSettings;
+  ReadingThemeData? _cachedTheme;
+
+  MarkdownStyleSheet get _styleSheet {
+    // Rebuild only when settings or theme actually change.
+    if (_cachedStyleSheet == null ||
+        _cachedSettings != widget.settings ||
+        _cachedTheme != widget.theme) {
+      _cachedSettings = widget.settings;
+      _cachedTheme = widget.theme;
+      _cachedStyleSheet = _buildStyleSheet();
+    }
+    return _cachedStyleSheet!;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (markdown.trim().isEmpty) return const SizedBox.shrink();
+    if (widget.markdown.trim().isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalMargin),
+      padding: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
       child: SelectionArea(
         magnifierConfiguration: TextMagnifierConfiguration.disabled,
         contextMenuBuilder: (ctx, state) {
@@ -323,11 +361,11 @@ class _ProseBlock extends StatelessWidget {
             final selected = await readSelectedText();
             if (selected.isEmpty) return;
             ContextMenuController.removeAny();
-            onHighlight?.call(
+            widget.onHighlight?.call(
               selected,
               value.selection.start,
               value.selection.end,
-              messageId,
+              widget.messageId,
               color,
             );
           }
@@ -342,7 +380,7 @@ class _ProseBlock extends StatelessWidget {
                 ContextMenuController.removeAny();
                 final start = value.selection.start;
                 final end = value.selection.end;
-                onAskAI?.call(selected, start, end, messageId);
+                widget.onAskAI?.call(selected, start, end, widget.messageId);
               }
             },
           );
@@ -373,27 +411,27 @@ class _ProseBlock extends StatelessWidget {
           );
         },
         child: MarkdownBody(
-          data: markdown,
+          data: widget.markdown,
           selectable: false,
           inlineSyntaxes: [_HighlightInlineSyntax()],
           builders: {
             'loomhl': _HighlightBuilder(
-              theme: theme,
-              flashHighlightId: flashHighlightId,
+              theme: widget.theme,
+              flashHighlightId: widget.flashHighlightId,
             ),
           },
-          styleSheet: _buildStyleSheet(),
+          styleSheet: _styleSheet,
           onTapLink: (text, href, title) {
             if (href != null) {
               if (href.startsWith('loom://explore/')) {
-                onLinkTap?.call(href.substring('loom://explore/'.length));
+                widget.onLinkTap?.call(href.substring('loom://explore/'.length));
                 return;
               }
               Clipboard.setData(ClipboardData(text: href));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Link copied: $href'),
-                  backgroundColor: theme.surfaceElevated,
+                  backgroundColor: widget.theme.surfaceElevated,
                   behavior: SnackBarBehavior.floating,
                   duration: const Duration(seconds: 2),
                 ),
@@ -406,6 +444,8 @@ class _ProseBlock extends StatelessWidget {
   }
 
   MarkdownStyleSheet _buildStyleSheet() {
+    final settings = widget.settings;
+    final theme = widget.theme;
     final fontFamily = settings.fontFamily == ReadingFontFamily.sansSerif
         ? null
         : settings.fontFamily.fontFamily;
@@ -650,12 +690,21 @@ class _CodeBlock extends StatefulWidget {
 
 class _CodeBlockState extends State<_CodeBlock> {
   bool _copied = false;
+  Timer? _copyTimer;
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: widget.code));
     setState(() => _copied = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _copied = false);
+    _copyTimer?.cancel();
+    _copyTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _copyTimer?.cancel();
+    super.dispose();
   }
 
   @override

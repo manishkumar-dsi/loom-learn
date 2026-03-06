@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/reading_theme.dart';
@@ -90,4 +91,12 @@ final readingSettingsProvider =
 final readingThemeProvider = Provider<ReadingThemeData>((ref) {
   final settings = ref.watch(readingSettingsProvider);
   return ReadingThemeData.forMode(settings.theme);
+});
+
+/// Cached MaterialTheme — only rebuilt when the reading theme mode changes.
+/// Use this in [MaterialApp.theme] instead of calling [toMaterialTheme()]
+/// inline on every build.
+final materialThemeProvider = Provider<ThemeData>((ref) {
+  final readingTheme = ref.watch(readingThemeProvider);
+  return readingTheme.toMaterialTheme();
 });
