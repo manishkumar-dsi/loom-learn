@@ -11,8 +11,9 @@ class LoomLearnApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final readingTheme = ref.watch(readingThemeProvider);
-    final materialTheme = readingTheme.toMaterialTheme();
+    // Use the cached material theme provider to avoid rebuilding ThemeData
+    // on every frame — only rebuilds when reading theme mode changes.
+    final materialTheme = ref.watch(materialThemeProvider);
 
     return MaterialApp(
       title: 'Loom Learn',

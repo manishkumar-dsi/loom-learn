@@ -26,23 +26,41 @@ class ThemeAwareChatInput extends StatefulWidget {
 class _ThemeAwareChatInputState extends State<ThemeAwareChatInput> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+  final _keyboardFocusNode = FocusNode();
 
-  bool get _canSend =>
-      !widget.isStreaming && _controller.text.trim().isNotEmpty;
+  /// Tracks whether the text field has content. Updated only when the
+  /// empty/non-empty state actually changes, avoiding per-keystroke rebuilds.
+  final ValueNotifier<bool> _hasText = ValueNotifier(false);
+
+  void _onTextChanged() {
+    final hasContent = _controller.text.trim().isNotEmpty;
+    if (_hasText.value != hasContent) {
+      _hasText.value = hasContent;
+    }
+  }
 
   void _send() {
     final text = _controller.text.trim();
     if (text.isEmpty || widget.isStreaming) return;
     _controller.clear();
-    setState(() {});
+    _hasText.value = false;
     widget.onSend(text);
     _focusNode.requestFocus();
   }
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
+    _keyboardFocusNode.dispose();
+    _hasText.dispose();
     super.dispose();
   }
 
@@ -72,7 +90,7 @@ class _ThemeAwareChatInputState extends State<ThemeAwareChatInput> {
                 border: Border.all(color: rt.border),
               ),
               child: KeyboardListener(
-                focusNode: FocusNode(),
+                focusNode: _keyboardFocusNode,
                 onKeyEvent: (event) {
                   if (event is KeyDownEvent &&
                       event.logicalKey == LogicalKeyboardKey.enter &&
@@ -104,17 +122,20 @@ class _ThemeAwareChatInputState extends State<ThemeAwareChatInput> {
                       vertical: 10,
                     ),
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          _SendButton(
-            enabled: _canSend,
-            isStreaming: widget.isStreaming,
-            theme: rt,
-            onTap: _send,
+          // Only rebuild send button when hasText or isStreaming changes.
+          ValueListenableBuilder<bool>(
+            valueListenable: _hasText,
+            builder: (context, hasText, _) => _SendButton(
+              enabled: !widget.isStreaming && hasText,
+              isStreaming: widget.isStreaming,
+              theme: rt,
+              onTap: _send,
+            ),
           ),
         ],
       ),

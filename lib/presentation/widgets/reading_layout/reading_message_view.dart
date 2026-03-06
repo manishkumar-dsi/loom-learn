@@ -80,9 +80,11 @@ class ReadingMessageView extends StatelessWidget {
             ),
           MessageRole.system => const SizedBox.shrink(),
         };
-        final key = keyForMessageId?.call(msg.id);
-        if (key == null) return child;
-        return KeyedSubtree(key: key, child: child);
+        // Always provide a key so Flutter can identify which items changed
+        // during streaming and avoid unnecessary sibling rebuilds.
+        final globalKey = keyForMessageId?.call(msg.id);
+        if (globalKey != null) return KeyedSubtree(key: globalKey, child: child);
+        return KeyedSubtree(key: ValueKey(msg.id), child: child);
       },
     );
   }

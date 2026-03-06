@@ -99,6 +99,7 @@ class ReadingThemeData {
 
   // ── Derived helpers ───────────────────────────────────────────────────────
 
+  /// Gradient derived from accent and link colors.
   LinearGradient get accentGradient => LinearGradient(
         colors: [accent, link],
         begin: Alignment.topLeft,

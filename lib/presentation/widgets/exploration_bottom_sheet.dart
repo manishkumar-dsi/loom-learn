@@ -86,7 +86,11 @@ class _ExplorationBottomSheetState
   Widget build(BuildContext context) {
     final rt = ref.watch(readingThemeProvider);
     final settings = ref.watch(readingSettingsProvider);
-    final chatState = ref.watch(chatProvider(widget.conversationId));
+    // Only watch isStreaming to avoid rebuilding the entire sheet on every
+    // streaming delta. Messages are resolved directly from the repository.
+    final isStreaming = ref.watch(
+      chatProvider(widget.conversationId).select((s) => s.isStreaming),
+    );
     final chatNotifier =
         ref.read(chatProvider(widget.conversationId).notifier);
 
@@ -225,7 +229,7 @@ class _ExplorationBottomSheetState
               // ── Input ─────────────────────────────────────────────────────
               ThemeAwareChatInput(
                 theme: rt,
-                isStreaming: chatState.isStreaming,
+                isStreaming: isStreaming,
                 onSend: (text) {
                   chatNotifier.sendMessage(
                     nodeId: _activeNodeId,

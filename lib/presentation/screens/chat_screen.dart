@@ -97,6 +97,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final isFocusMode = settings.distractionFreeMode;
     final settingsNotifier = ref.read(readingSettingsProvider.notifier);
     final jumpTarget = ref.watch(highlightJumpProvider);
+    // Watch only the fields we need from chat state to minimize rebuilds.
     final chatState = ref.watch(chatProvider(widget.conversationId));
     final chatNotifier =
         ref.read(chatProvider(widget.conversationId).notifier);
@@ -326,12 +327,14 @@ class _ChatHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rt = theme;
-    final conv = ref
-        .watch(conversationsProvider)
-        .conversations
-        .where((c) => c.id == conversationId)
-        .firstOrNull;
-    final nodeCount = conv?.nodes.length ?? 1;
+    // Select only the node count for this conversation to avoid rebuilding
+    // the header on every message or conversation list change.
+    final nodeCount = ref.watch(conversationsProvider.select((state) {
+      final conv = state.conversations
+          .where((c) => c.id == conversationId)
+          .firstOrNull;
+      return conv?.nodes.length ?? 1;
+    }));
 
     return Container(
       height: 56,
