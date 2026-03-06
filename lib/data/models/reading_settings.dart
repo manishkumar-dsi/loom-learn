@@ -81,6 +81,7 @@ class ReadingSettings {
   final ReadingFontFamily fontFamily;
   final ReadingLineSpacing lineSpacing;
   final ReadingMargin margin;
+  final bool distractionFreeMode;
 
   /// Body font size in logical pixels. Range: 13–24.
   final double fontSize;
@@ -90,6 +91,7 @@ class ReadingSettings {
     this.fontFamily = ReadingFontFamily.sansSerif,
     this.lineSpacing = ReadingLineSpacing.normal,
     this.margin = ReadingMargin.normal,
+    this.distractionFreeMode = false,
     this.fontSize = 16.0,
   });
 
@@ -100,6 +102,7 @@ class ReadingSettings {
     ReadingFontFamily? fontFamily,
     ReadingLineSpacing? lineSpacing,
     ReadingMargin? margin,
+    bool? distractionFreeMode,
     double? fontSize,
   }) {
     return ReadingSettings(
@@ -107,6 +110,7 @@ class ReadingSettings {
       fontFamily: fontFamily ?? this.fontFamily,
       lineSpacing: lineSpacing ?? this.lineSpacing,
       margin: margin ?? this.margin,
+      distractionFreeMode: distractionFreeMode ?? this.distractionFreeMode,
       fontSize: fontSize ?? this.fontSize,
     );
   }
@@ -116,6 +120,7 @@ class ReadingSettings {
         'fontFamily': fontFamily.name,
         'lineSpacing': lineSpacing.name,
         'margin': margin.name,
+        'distractionFreeMode': distractionFreeMode,
         'fontSize': fontSize,
       };
 
@@ -133,6 +138,7 @@ class ReadingSettings {
       margin: ReadingMargin.values.byName(
         json['margin'] as String? ?? ReadingMargin.normal.name,
       ),
+      distractionFreeMode: json['distractionFreeMode'] as bool? ?? false,
       fontSize: (json['fontSize'] as num?)?.toDouble() ?? _kDefaultFontSize,
     );
   }

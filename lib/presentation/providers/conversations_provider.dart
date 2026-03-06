@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/conversation.dart';
-import '../../data/models/message.dart';
 import '../../data/repositories/conversation_repository.dart';
 import 'storage_provider.dart';
 
@@ -47,10 +46,31 @@ class ConversationsNotifier extends StateNotifier<ConversationsState> {
   final ConversationRepository _repo;
 
   ConversationsNotifier(this._repo)
-      : super(ConversationsState(conversations: _repo.conversations));
+      : super(ConversationsState(
+          conversations: _repo.conversations,
+          activeConversationId: _repo.conversations.isNotEmpty
+              ? _repo.conversations.first.id
+              : null,
+        ));
 
   void _sync() {
     state = state.copyWith(conversations: _repo.conversations);
+  }
+
+  /// Ensures there is an active conversation: if none selected, selects the
+  /// first existing one or creates one synchronously so the UI never blocks.
+  void ensureFirstConversation() {
+    if (state.activeConversationId != null) return;
+    if (state.conversations.isNotEmpty) {
+      state = state.copyWith(activeConversationId: state.conversations.first.id);
+      return;
+    }
+    final conv = _repo.createConversationSync();
+    state = state.copyWith(
+      conversations: [conv, ...state.conversations],
+      activeConversationId: conv.id,
+    );
+    _repo.persistConversations(); // fire-and-forget
   }
 
   Future<Conversation> newConversation() async {

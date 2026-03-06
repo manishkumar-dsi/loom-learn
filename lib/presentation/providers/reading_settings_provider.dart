@@ -58,6 +58,11 @@ class ReadingSettingsNotifier extends StateNotifier<ReadingSettings> {
     state = state.copyWith(margin: margin);
     await _persist();
   }
+
+  Future<void> setDistractionFreeMode(bool enabled) async {
+    state = state.copyWith(distractionFreeMode: enabled);
+    await _persist();
+  }
 }
 
 // ── Thin wrapper to avoid direct SharedPreferences dependency in notifier ─────

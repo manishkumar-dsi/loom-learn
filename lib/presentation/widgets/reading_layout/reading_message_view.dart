@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/reading_theme.dart';
 import '../../../data/models/message.dart';
 import '../../../data/models/reading_settings.dart';
+import '../../../data/models/text_highlight.dart';
 import 'question_card.dart';
 import 'reading_response_view.dart';
 
@@ -25,6 +26,15 @@ class ReadingMessageView extends StatelessWidget {
     int endOffset,
     String messageId,
   )? onAskAI;
+  final void Function(
+    String selectedText,
+    int startOffset,
+    int endOffset,
+    String messageId,
+    HighlightColor color,
+  )? onHighlight;
+  final GlobalKey Function(String messageId)? keyForMessageId;
+  final String? flashHighlightId;
 
   const ReadingMessageView({
     super.key,
@@ -33,6 +43,9 @@ class ReadingMessageView extends StatelessWidget {
     required this.theme,
     this.onLinkTap,
     this.onAskAI,
+    this.onHighlight,
+    this.keyForMessageId,
+    this.flashHighlightId,
   });
 
   @override
@@ -49,7 +62,7 @@ class ReadingMessageView extends StatelessWidget {
       itemBuilder: (context, i) {
         final msg = visible[i];
 
-        return switch (msg.role) {
+        final child = switch (msg.role) {
           MessageRole.user => QuestionCard(
               text: msg.content,
               theme: theme,
@@ -62,9 +75,14 @@ class ReadingMessageView extends StatelessWidget {
               horizontalMargin: margin,
               onLinkTap: onLinkTap,
               onAskAI: onAskAI,
+              onHighlight: onHighlight,
+              flashHighlightId: flashHighlightId,
             ),
           MessageRole.system => const SizedBox.shrink(),
         };
+        final key = keyForMessageId?.call(msg.id);
+        if (key == null) return child;
+        return KeyedSubtree(key: key, child: child);
       },
     );
   }

@@ -5,6 +5,8 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/conversation_node.dart';
 import '../../data/models/message.dart';
 import '../providers/chat_provider.dart';
+import '../providers/reading_settings_provider.dart';
+import 'ask_about_dialog.dart';
 import 'breadcrumb_bar.dart';
 import 'chat_input.dart';
 import 'message_bubble.dart';
@@ -135,13 +137,21 @@ class _VirtualPagePanelState extends ConsumerState<VirtualPagePanel>
                 scrollController: _scrollController,
                 onScrollToBottom: _scrollToBottom,
                 onLinkTap: widget.onLinkTap,
-                onAskAI: (text, start, end, msgId) {
-                  chatNotifier.exploreText(
+                onAskAI: (text, start, end, msgId) async {
+                  final rt = ref.read(readingThemeProvider);
+                  final question = await showAskAboutSelectionDialog(
+                    context: context,
+                    theme: rt,
+                    selectedText: text,
+                  );
+                  if (question == null) return;
+                  await chatNotifier.exploreText(
                     parentNodeId: _activeNodeId,
                     sourceMessageId: msgId,
                     triggerText: text,
                     startOffset: start,
                     endOffset: end,
+                    userQuestion: question.isEmpty ? null : question,
                   );
                 },
               ),

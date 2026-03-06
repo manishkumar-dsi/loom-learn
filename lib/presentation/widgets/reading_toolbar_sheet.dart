@@ -142,6 +142,16 @@ class _ReadingToolbarSheet extends ConsumerWidget {
                     selected: settings.theme,
                     onChanged: notifier.setTheme,
                   ),
+
+                  const SizedBox(height: 24),
+
+                  _SectionLabel(label: 'Reading Mode', theme: theme),
+                  const SizedBox(height: 10),
+                  _ModeToggle(
+                    enabled: settings.distractionFreeMode,
+                    theme: theme,
+                    onChanged: notifier.setDistractionFreeMode,
+                  ),
                 ],
               ),
             ),
@@ -472,6 +482,64 @@ class _SectionLabel extends StatelessWidget {
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
+      ),
+    );
+  }
+}
+
+class _ModeToggle extends StatelessWidget {
+  final bool enabled;
+  final ReadingThemeData theme;
+  final void Function(bool) onChanged;
+
+  const _ModeToggle({
+    required this.enabled,
+    required this.theme,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.surfaceElevated,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.menu_book_rounded, size: 18, color: theme.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Distraction-free mode',
+                  style: TextStyle(
+                    color: theme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Hide chat chrome and read like a book.',
+                  style: TextStyle(
+                    color: theme.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: enabled,
+            onChanged: onChanged,
+            activeColor: theme.accent,
+          ),
+        ],
       ),
     );
   }

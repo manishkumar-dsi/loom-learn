@@ -1,4 +1,5 @@
 import 'text_link.dart';
+import 'text_highlight.dart';
 
 enum MessageRole { user, assistant, system }
 
@@ -15,6 +16,9 @@ class Message {
   /// Links embedded in this message's content (only on assistant messages).
   final List<TextLink> links;
 
+  /// User-created highlights attached to this message's raw content.
+  final List<TextHighlight> highlights;
+
   /// True while the assistant is still streaming a response.
   final bool isStreaming;
 
@@ -24,12 +28,14 @@ class Message {
     required this.content,
     required this.timestamp,
     this.links = const [],
+    this.highlights = const [],
     this.isStreaming = false,
   });
 
   Message copyWith({
     String? content,
     List<TextLink>? links,
+    List<TextHighlight>? highlights,
     bool? isStreaming,
   }) {
     return Message(
@@ -38,6 +44,7 @@ class Message {
       content: content ?? this.content,
       timestamp: timestamp,
       links: links ?? this.links,
+      highlights: highlights ?? this.highlights,
       isStreaming: isStreaming ?? this.isStreaming,
     );
   }
@@ -48,6 +55,7 @@ class Message {
         'content': content,
         'timestamp': timestamp.toIso8601String(),
         'links': links.map((l) => l.toJson()).toList(),
+        'highlights': highlights.map((h) => h.toJson()).toList(),
         'isStreaming': false, // never persist a streaming state
       };
 
@@ -58,6 +66,10 @@ class Message {
         timestamp: DateTime.parse(json['timestamp'] as String),
         links: (json['links'] as List<dynamic>?)
                 ?.map((e) => TextLink.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        highlights: (json['highlights'] as List<dynamic>?)
+                ?.map((e) => TextHighlight.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [],
         isStreaming: false,

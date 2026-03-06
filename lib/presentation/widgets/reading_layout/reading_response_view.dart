@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 
 import '../../../core/theme/reading_theme.dart';
 import '../../../data/models/message.dart';
 import '../../../data/models/reading_settings.dart';
+import '../../../data/models/text_highlight.dart';
 import '../../../data/models/text_link.dart';
 import '../typing_indicator.dart';
 
@@ -29,6 +31,14 @@ class ReadingResponseView extends StatelessWidget {
     int endOffset,
     String messageId,
   )? onAskAI;
+  final void Function(
+    String selectedText,
+    int startOffset,
+    int endOffset,
+    String messageId,
+    HighlightColor color,
+  )? onHighlight;
+  final String? flashHighlightId;
 
   const ReadingResponseView({
     super.key,
@@ -38,6 +48,8 @@ class ReadingResponseView extends StatelessWidget {
     required this.horizontalMargin,
     this.onLinkTap,
     this.onAskAI,
+    this.onHighlight,
+    this.flashHighlightId,
   });
 
   @override
@@ -97,6 +109,8 @@ class ReadingResponseView extends StatelessWidget {
             horizontalMargin: horizontalMargin,
             onLinkTap: onLinkTap,
             onAskAI: onAskAI,
+            onHighlight: onHighlight,
+            flashHighlightId: flashHighlightId,
           ),
 
         // ── Exploration chips ──────────────────────────────────────────────
@@ -106,6 +120,14 @@ class ReadingResponseView extends StatelessWidget {
             theme: theme,
             horizontalMargin: horizontalMargin,
             onTap: (nodeId) => onLinkTap?.call(nodeId),
+          ),
+
+        if (message.highlights.isNotEmpty)
+          _HighlightChips(
+            highlights: message.highlights,
+            theme: theme,
+            horizontalMargin: horizontalMargin,
+            flashHighlightId: flashHighlightId,
           ),
 
         // ── Section divider ────────────────────────────────────────────────
@@ -191,6 +213,8 @@ class _ResponseBody extends StatelessWidget {
   final double horizontalMargin;
   final void Function(String childNodeId)? onLinkTap;
   final void Function(String, int, int, String)? onAskAI;
+  final void Function(String, int, int, String, HighlightColor)? onHighlight;
+  final String? flashHighlightId;
 
   const _ResponseBody({
     required this.message,
@@ -199,6 +223,8 @@ class _ResponseBody extends StatelessWidget {
     required this.horizontalMargin,
     this.onLinkTap,
     this.onAskAI,
+    this.onHighlight,
+    this.flashHighlightId,
   });
 
   @override
@@ -215,7 +241,10 @@ class _ResponseBody extends StatelessWidget {
               theme: theme,
               horizontalMargin: horizontalMargin,
               messageId: message.id,
+              onLinkTap: onLinkTap,
               onAskAI: onAskAI,
+              onHighlight: onHighlight,
+              flashHighlightId: flashHighlightId,
             ),
           _CodeSegment(:final code, :final language) => Padding(
               padding: EdgeInsets.symmetric(
@@ -243,16 +272,21 @@ class _ProseBlock extends StatelessWidget {
   final ReadingThemeData theme;
   final double horizontalMargin;
   final String messageId;
+  final void Function(String childNodeId)? onLinkTap;
   final void Function(String, int, int, String)? onAskAI;
+  final void Function(String, int, int, String, HighlightColor)? onHighlight;
+  final String? flashHighlightId;
 
   const _ProseBlock({
-    super.key,
     required this.markdown,
     required this.settings,
     required this.theme,
     required this.horizontalMargin,
     required this.messageId,
+    this.onLinkTap,
     this.onAskAI,
+    this.onHighlight,
+    this.flashHighlightId,
   });
 
   @override
@@ -262,24 +296,99 @@ class _ProseBlock extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontalMargin),
       child: SelectionArea(
-        contextMenuBuilder: (ctx, state) => _KindleContextMenu(
-          anchors: state.contextMenuAnchors,
-          defaultItems: state.contextMenuButtonItems,
-          theme: theme,
-          onAskAI: () {
-            final selected = state.selectedContent?.plainText ?? '';
-            if (selected.trim().isNotEmpty) {
-              ContextMenuController.removeAny();
-              onAskAI?.call(selected.trim(), 0, -1, messageId);
+        magnifierConfiguration: TextMagnifierConfiguration.disabled,
+        contextMenuBuilder: (ctx, state) {
+          Future<String> readSelectedText() async {
+            final value = state.textEditingValue;
+            var selected = value.selection.textInside(value.text).trim();
+            if (selected.isNotEmpty) return selected;
+
+            // Fallback for SelectionArea on Android: trigger platform Copy action.
+            ContextMenuButtonItem? copyItem;
+            for (final item in state.contextMenuButtonItems) {
+              if (item.type == ContextMenuButtonType.copy ||
+                  item.label?.toLowerCase() == 'copy') {
+                copyItem = item;
+                break;
+              }
             }
-          },
-        ),
+            copyItem?.onPressed?.call();
+            await Future<void>.delayed(const Duration(milliseconds: 40));
+            final data = await Clipboard.getData('text/plain');
+            return data?.text?.trim() ?? '';
+          }
+
+          Future<void> emitHighlight(HighlightColor color) async {
+            final value = state.textEditingValue;
+            final selected = await readSelectedText();
+            if (selected.isEmpty) return;
+            ContextMenuController.removeAny();
+            onHighlight?.call(
+              selected,
+              value.selection.start,
+              value.selection.end,
+              messageId,
+              color,
+            );
+          }
+
+          final askAiItem = ContextMenuButtonItem(
+            label: 'Ask AI',
+            onPressed: () async {
+              final value = state.textEditingValue;
+              final selected = await readSelectedText();
+
+              if (selected.isNotEmpty) {
+                ContextMenuController.removeAny();
+                final start = value.selection.start;
+                final end = value.selection.end;
+                onAskAI?.call(selected, start, end, messageId);
+              }
+            },
+          );
+          final highlightItems = <ContextMenuButtonItem>[
+            ContextMenuButtonItem(
+              label: 'Highlight Yellow',
+              onPressed: () => emitHighlight(HighlightColor.yellow),
+            ),
+            ContextMenuButtonItem(
+              label: 'Highlight Green',
+              onPressed: () => emitHighlight(HighlightColor.green),
+            ),
+            ContextMenuButtonItem(
+              label: 'Highlight Pink',
+              onPressed: () => emitHighlight(HighlightColor.pink),
+            ),
+          ];
+          // Exclude platform AI items (Ask ChatGPT, Ask Claude, etc.) so we only show our "Ask AI"
+          final standardItems = state.contextMenuButtonItems.where((item) {
+            final label = item.label?.toLowerCase() ?? '';
+            return !label.contains('chatgpt') &&
+                !label.contains('claude') &&
+                !label.contains('gemini');
+          }).toList();
+          return AdaptiveTextSelectionToolbar.buttonItems(
+            anchors: state.contextMenuAnchors,
+            buttonItems: [askAiItem, ...highlightItems, ...standardItems],
+          );
+        },
         child: MarkdownBody(
           data: markdown,
           selectable: false,
+          inlineSyntaxes: [_HighlightInlineSyntax()],
+          builders: {
+            'loomhl': _HighlightBuilder(
+              theme: theme,
+              flashHighlightId: flashHighlightId,
+            ),
+          },
           styleSheet: _buildStyleSheet(),
           onTapLink: (text, href, title) {
             if (href != null) {
+              if (href.startsWith('loom://explore/')) {
+                onLinkTap?.call(href.substring('loom://explore/'.length));
+                return;
+              }
               Clipboard.setData(ClipboardData(text: href));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -451,6 +560,65 @@ class _ProseBlock extends StatelessWidget {
       tableCellsPadding: const EdgeInsets.symmetric(
         horizontal: 12,
         vertical: 8,
+      ),
+    );
+  }
+}
+
+class _HighlightInlineSyntax extends md.InlineSyntax {
+  _HighlightInlineSyntax()
+      : super(r'\[\[hl:(yellow|green|pink):([^\]]+)\]\](.*?)\[\[/hl\]\]');
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final color = match.group(1) ?? 'yellow';
+    final id = match.group(2) ?? '';
+    final text = match.group(3) ?? '';
+    final el = md.Element.text('loomhl', text)
+      ..attributes['color'] = color
+      ..attributes['id'] = id;
+    parser.addNode(el);
+    return true;
+  }
+}
+
+class _HighlightBuilder extends MarkdownElementBuilder {
+  final ReadingThemeData theme;
+  final String? flashHighlightId;
+
+  _HighlightBuilder({
+    required this.theme,
+    required this.flashHighlightId,
+  });
+
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    final colorName = element.attributes['color'] ?? 'yellow';
+    final id = element.attributes['id'] ?? '';
+    final hlColor = switch (colorName) {
+      'green' => theme.highlightColor(HighlightColor.green),
+      'pink' => theme.highlightColor(HighlightColor.pink),
+      _ => theme.highlightColor(HighlightColor.yellow),
+    };
+    final isFlashing = flashHighlightId != null && flashHighlightId == id;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      decoration: BoxDecoration(
+        color: hlColor.withValues(
+          alpha: isFlashing
+              ? (theme.isDark ? 0.92 : 0.98)
+              : (theme.isDark ? 0.6 : 0.72),
+        ),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        element.textContent,
+        style: (preferredStyle ?? const TextStyle()).copyWith(
+          color: theme.textPrimary,
+          fontWeight: isFlashing ? FontWeight.w600 : FontWeight.w500,
+        ),
       ),
     );
   }
@@ -633,142 +801,6 @@ class _CopyBadge extends StatelessWidget {
   }
 }
 
-// ── Custom Kindle Context Menu ────────────────────────────────────────────────
-
-class _KindleContextMenu extends StatelessWidget {
-  final TextSelectionToolbarAnchors anchors;
-  final List<ContextMenuButtonItem> defaultItems;
-  final VoidCallback onAskAI;
-  final ReadingThemeData theme;
-
-  const _KindleContextMenu({
-    required this.anchors,
-    required this.defaultItems,
-    required this.onAskAI,
-    required this.theme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final anchor = anchors.primaryAnchor;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Stack(
-      children: [
-        Positioned(
-          left: (anchor.dx - 120).clamp(8.0, screenWidth - 260),
-          top: (anchor.dy - 60).clamp(8.0, double.infinity),
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 320),
-              decoration: BoxDecoration(
-                color: theme.isDark
-                    ? const Color(0xFF2A2A2A)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 24,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: IntrinsicHeight(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _MenuAction(
-                        label: 'Ask AI',
-                        icon: Icons.auto_awesome_rounded,
-                        isPrimary: true,
-                        theme: theme,
-                        onTap: onAskAI,
-                      ),
-                      VerticalDivider(width: 1, color: theme.border),
-                      ..._buildDefaultActions(),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _buildDefaultActions() {
-    final copyItem = defaultItems
-        .where((item) =>
-            item.type == ContextMenuButtonType.copy || item.label == 'Copy')
-        .firstOrNull;
-
-    if (copyItem == null) return [];
-
-    return [
-      _MenuAction(
-        label: 'Copy',
-        icon: Icons.copy_rounded,
-        isPrimary: false,
-        theme: theme,
-        onTap: () => copyItem.onPressed?.call(),
-      ),
-    ];
-  }
-}
-
-class _MenuAction extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isPrimary;
-  final ReadingThemeData theme;
-  final VoidCallback onTap;
-
-  const _MenuAction({
-    required this.label,
-    required this.icon,
-    required this.isPrimary,
-    required this.theme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        color: isPrimary
-            ? theme.accent.withValues(alpha: theme.isDark ? 0.2 : 0.1)
-            : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 15,
-              color: isPrimary ? theme.accent : theme.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isPrimary ? theme.accent : theme.textSecondary,
-                fontSize: 13,
-                fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Exploration Chips ─────────────────────────────────────────────────────────
 
 class _ExplorationChips extends StatelessWidget {
@@ -836,6 +868,75 @@ class _ExplorationChips extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HighlightChips extends StatelessWidget {
+  final List<TextHighlight> highlights;
+  final ReadingThemeData theme;
+  final double horizontalMargin;
+  final String? flashHighlightId;
+
+  const _HighlightChips({
+    required this.highlights,
+    required this.theme,
+    required this.horizontalMargin,
+    this.flashHighlightId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontalMargin, 8, horizontalMargin, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'HIGHLIGHTS',
+            style: TextStyle(
+              color: theme.textMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: highlights.map((h) {
+              final bg = theme.highlightColor(h.color);
+              final isFlashing = flashHighlightId == h.id;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: bg.withValues(
+                    alpha: isFlashing
+                        ? (theme.isDark ? 0.85 : 0.95)
+                        : (theme.isDark ? 0.55 : 0.7),
+                  ),
+                  borderRadius: BorderRadius.circular(isFlashing ? 10 : 14),
+                  border: Border.all(
+                    color: bg.withValues(alpha: isFlashing ? 1 : 0.8),
+                    width: isFlashing ? 1.6 : 1,
+                  ),
+                ),
+                child: Text(
+                  h.selectedText.length > 42
+                      ? '${h.selectedText.substring(0, 41)}…'
+                      : h.selectedText,
+                  style: TextStyle(
+                    color: theme.textPrimary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               );

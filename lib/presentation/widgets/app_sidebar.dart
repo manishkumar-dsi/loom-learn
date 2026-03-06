@@ -9,8 +9,9 @@ import '../providers/reading_settings_provider.dart';
 /// Collapsible conversation list sidebar. Theme-aware via [readingThemeProvider].
 class AppSidebar extends ConsumerWidget {
   final VoidCallback? onSettingsTap;
+  final VoidCallback? onHighlightsTap;
 
-  const AppSidebar({super.key, this.onSettingsTap});
+  const AppSidebar({super.key, this.onSettingsTap, this.onHighlightsTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,7 +47,11 @@ class AppSidebar extends ConsumerWidget {
                   ),
           ),
           Divider(height: 1, color: rt.border),
-          _SidebarFooter(theme: rt, onSettingsTap: onSettingsTap),
+          _SidebarFooter(
+            theme: rt,
+            onSettingsTap: onSettingsTap,
+            onHighlightsTap: onHighlightsTap,
+          ),
         ],
       ),
     );
@@ -239,20 +244,40 @@ class _ConversationTileState extends State<_ConversationTile> {
 class _SidebarFooter extends StatelessWidget {
   final ReadingThemeData theme;
   final VoidCallback? onSettingsTap;
+  final VoidCallback? onHighlightsTap;
 
-  const _SidebarFooter({required this.theme, this.onSettingsTap});
+  const _SidebarFooter({
+    required this.theme,
+    this.onSettingsTap,
+    this.onHighlightsTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading:
-          Icon(Icons.settings_outlined, size: 18, color: theme.textMuted),
-      title: Text(
-        'Settings',
-        style: TextStyle(color: theme.textSecondary, fontSize: 14),
-      ),
-      onTap: onSettingsTap,
-      dense: true,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          leading:
+              Icon(Icons.highlight_alt_rounded, size: 18, color: theme.textMuted),
+          title: Text(
+            'Highlights',
+            style: TextStyle(color: theme.textSecondary, fontSize: 14),
+          ),
+          onTap: onHighlightsTap,
+          dense: true,
+        ),
+        ListTile(
+          leading:
+              Icon(Icons.settings_outlined, size: 18, color: theme.textMuted),
+          title: Text(
+            'Settings',
+            style: TextStyle(color: theme.textSecondary, fontSize: 14),
+          ),
+          onTap: onSettingsTap,
+          dense: true,
+        ),
+      ],
     );
   }
 }

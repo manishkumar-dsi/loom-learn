@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/reading_theme.dart';
 import '../../data/models/message.dart';
-import '../../data/models/reading_settings.dart';
 import '../providers/chat_provider.dart';
 import '../providers/conversations_provider.dart';
 import '../providers/reading_settings_provider.dart';
+import 'ask_about_dialog.dart';
 import 'reading_layout/reading_message_view.dart';
 import 'theme_aware_chat_input.dart';
 
@@ -184,13 +184,38 @@ class _ExplorationBottomSheetState
                           settings: settings,
                           theme: rt,
                           onLinkTap: widget.onLinkTap,
-                          onAskAI: (text, start, end, msgId) {
-                            chatNotifier.exploreText(
+                          onAskAI: (text, start, end, msgId) async {
+                            final question = await showAskAboutSelectionDialog(
+                              context: context,
+                              theme: rt,
+                              selectedText: text,
+                            );
+                            if (question == null) return;
+                            await chatNotifier.exploreText(
                               parentNodeId: _activeNodeId,
                               sourceMessageId: msgId,
                               triggerText: text,
                               startOffset: start,
                               endOffset: end,
+                              userQuestion: question.isEmpty ? null : question,
+                            );
+                          },
+                          onHighlight: (text, start, end, msgId, color) async {
+                            await chatNotifier.addHighlight(
+                              nodeId: _activeNodeId,
+                              messageId: msgId,
+                              selectedText: text,
+                              startOffset: start,
+                              endOffset: end,
+                              color: color,
+                            );
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Highlighted in ${color.label}'),
+                                duration: const Duration(milliseconds: 900),
+                                backgroundColor: rt.surfaceElevated,
+                              ),
                             );
                           },
                         ),

@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/storage_service.dart';
 import 'storage_provider.dart';
 
+/// Default API key used when none is saved in storage. Set your key here
+/// (avoid committing real keys to version control).
+const String kDefaultApiKey =
+    '';
+
 // ── Settings state ─────────────────────────────────────────────────────────
 
 class SettingsState {
@@ -46,7 +51,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
   Future<void> _load() async {
     state = state.copyWith(isLoading: true);
-    final key = await _storage.loadApiKey();
+    final stored = await _storage.loadApiKey();
+    final key = stored != null && stored.isNotEmpty
+        ? stored
+        : (kDefaultApiKey.isNotEmpty ? kDefaultApiKey : null);
     final model = _storage.loadModel();
     state = state.copyWith(
       apiKey: key,

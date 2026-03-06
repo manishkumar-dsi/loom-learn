@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/models/reading_settings.dart';
+import '../../data/models/text_highlight.dart';
 
 /// Complete visual specification for one reading mode.
 ///
@@ -54,6 +55,9 @@ class ReadingThemeData {
 
   /// Highlight color for text that has been explored.
   final Color exploredHighlight;
+  final Color highlightYellow;
+  final Color highlightGreen;
+  final Color highlightPink;
 
   /// True for dark / night themes (affects system overlay style, icon colors).
   final bool isDark;
@@ -86,6 +90,9 @@ class ReadingThemeData {
     required this.questionCardBorder,
     required this.sectionDivider,
     required this.exploredHighlight,
+    required this.highlightYellow,
+    required this.highlightGreen,
+    required this.highlightPink,
     required this.isDark,
     required this.systemOverlayStyle,
   });
@@ -126,6 +133,9 @@ class ReadingThemeData {
     questionCardBorder: Color(0xFFD1D1D6),
     sectionDivider: Color(0xFFE5E5EA),
     exploredHighlight: Color(0xFFFFEE00),
+    highlightYellow: Color(0xFFFFE07A),
+    highlightGreen: Color(0xFFB9F08F),
+    highlightPink: Color(0xFFF9B3E5),
     isDark: false,
     systemOverlayStyle: SystemUiOverlayStyle.dark,
   );
@@ -156,6 +166,9 @@ class ReadingThemeData {
     questionCardBorder: Color(0xFFCBAA78),
     sectionDivider: Color(0xFFD4B896),
     exploredHighlight: Color(0xFFFFDE73),
+    highlightYellow: Color(0xFFF1D168),
+    highlightGreen: Color(0xFFBFD67A),
+    highlightPink: Color(0xFFE7AFCC),
     isDark: false,
     systemOverlayStyle: SystemUiOverlayStyle.dark,
   );
@@ -186,6 +199,9 @@ class ReadingThemeData {
     questionCardBorder: Color(0xFF3A3A3A),
     sectionDivider: Color(0xFF2E2E2E),
     exploredHighlight: Color(0xFF7C3AED40),
+    highlightYellow: Color(0xFF8A6A1F),
+    highlightGreen: Color(0xFF295C34),
+    highlightPink: Color(0xFF6A3358),
     isDark: true,
     systemOverlayStyle: SystemUiOverlayStyle.light,
   );
@@ -216,6 +232,9 @@ class ReadingThemeData {
     questionCardBorder: Color(0xFF2A2A2A),
     sectionDivider: Color(0xFF1A1A1A),
     exploredHighlight: Color(0xFF9F67F540),
+    highlightYellow: Color(0xFF6E5317),
+    highlightGreen: Color(0xFF1E4A2A),
+    highlightPink: Color(0xFF552947),
     isDark: true,
     systemOverlayStyle: SystemUiOverlayStyle.light,
   );
@@ -227,6 +246,12 @@ class ReadingThemeData {
         ReadingThemeMode.sepia => sepia,
         ReadingThemeMode.dark => dark,
         ReadingThemeMode.night => night,
+      };
+
+  Color highlightColor(HighlightColor color) => switch (color) {
+        HighlightColor.yellow => highlightYellow,
+        HighlightColor.green => highlightGreen,
+        HighlightColor.pink => highlightPink,
       };
 
   // ── MaterialApp ThemeData bridge ──────────────────────────────────────────

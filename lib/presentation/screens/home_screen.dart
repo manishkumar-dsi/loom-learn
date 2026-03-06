@@ -6,6 +6,7 @@ import '../providers/conversations_provider.dart';
 import '../providers/reading_settings_provider.dart';
 import '../widgets/app_sidebar.dart';
 import 'chat_screen.dart';
+import 'highlights_screen.dart';
 import 'settings_screen.dart';
 
 /// Root screen. Adaptive layout: drawer on mobile, sidebar on wide screens.
@@ -24,19 +25,28 @@ class HomeScreen extends ConsumerWidget {
       );
     }
 
+    void openHighlights() {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const HighlightsScreen()),
+      );
+    }
+
     final convState = ref.watch(conversationsProvider);
     final convNotifier = ref.read(conversationsProvider.notifier);
     final apiSettings = ref.watch(settingsProvider);
 
-    // Auto-create first conversation when the list is empty
+    // Auto-create first conversation synchronously so we never block on storage
     if (convState.conversations.isEmpty &&
         convState.activeConversationId == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        convNotifier.newConversation();
+        convNotifier.ensureFirstConversation();
       });
     }
 
-    final sidebar = AppSidebar(onSettingsTap: openSettings);
+    final sidebar = AppSidebar(
+      onSettingsTap: openSettings,
+      onHighlightsTap: openHighlights,
+    );
 
     Widget body = convState.activeConversationId == null
         ? _LoadingView(theme: rt)
@@ -53,12 +63,14 @@ class HomeScreen extends ConsumerWidget {
     if (isWide) {
       return Scaffold(
         backgroundColor: rt.background,
-        body: Row(
-          children: [
-            sidebar,
-            VerticalDivider(width: 1, color: rt.border),
-            Expanded(child: body),
-          ],
+        body: SafeArea(
+          child: Row(
+            children: [
+              sidebar,
+              VerticalDivider(width: 1, color: rt.border),
+              Expanded(child: body),
+            ],
+          ),
         ),
       );
     }
@@ -70,7 +82,7 @@ class HomeScreen extends ConsumerWidget {
         width: 280,
         child: sidebar,
       ),
-      body: body,
+      body: SafeArea(child: body),
     );
   }
 }

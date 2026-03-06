@@ -4,6 +4,7 @@ import '../../core/services/openai_service.dart';
 import '../../core/utils/id_generator.dart';
 import '../../data/models/conversation_node.dart';
 import '../../data/models/message.dart';
+import '../../data/models/text_highlight.dart';
 import '../../data/repositories/conversation_repository.dart';
 import 'api_key_provider.dart';
 import 'conversations_provider.dart';
@@ -122,8 +123,7 @@ class ChatNotifier extends StateNotifier<NodeChatState> {
       content: userText.trim(),
       timestamp: DateTime.now(),
     );
-    final updatedNode =
-        await _repo.addMessageToNode(
+    await _repo.addMessageToNode(
       conversationId: conversationId,
       nodeId: nodeId,
       message: userMsg,
@@ -155,8 +155,10 @@ class ChatNotifier extends StateNotifier<NodeChatState> {
       _ref.read(conversationsProvider.notifier).refresh();
     }
 
-    // Build context messages (parent chain for virtual pages)
-    final contextMessages = _buildContext(conv.nodes, nodeId, settings.model);
+    // Build context from fresh repo state so the current user message is included
+    final convAfter = _repo.getConversation(conversationId);
+    if (convAfter == null) return;
+    final contextMessages = _buildContext(convAfter.nodes, nodeId, settings.model);
 
     // Stream response
     final buffer = StringBuffer();
@@ -195,14 +197,16 @@ class ChatNotifier extends StateNotifier<NodeChatState> {
     _ref.read(conversationsProvider.notifier).refresh();
   }
 
-  /// Creates a virtual page from a text selection and auto-sends an
-  /// exploration prompt into it.
+  /// Creates a virtual page from a text selection and sends the user's question
+  /// (or a default exploration prompt if [userQuestion] is null/empty).
+  /// The selected text becomes a link to this exploration after the response.
   Future<String?> exploreText({
     required String parentNodeId,
     required String sourceMessageId,
     required String triggerText,
     required int startOffset,
     required int endOffset,
+    String? userQuestion,
   }) async {
     final settings = _ref.read(settingsProvider);
     if (!settings.hasApiKey) {
@@ -222,13 +226,56 @@ class ChatNotifier extends StateNotifier<NodeChatState> {
     // Push the new page onto the stack
     pushVirtualPage(childNode.id);
 
-    // Auto-send an exploration prompt
+    final prompt = (userQuestion != null && userQuestion.trim().isNotEmpty)
+        ? userQuestion.trim()
+        : _explorationPrompt(triggerText);
     await sendMessage(
       nodeId: childNode.id,
-      userText: _explorationPrompt(triggerText),
+      userText: prompt,
     );
 
     return childNode.id;
+  }
+
+  Future<void> addHighlight({
+    required String nodeId,
+    required String messageId,
+    required String selectedText,
+    required int startOffset,
+    required int endOffset,
+    required HighlightColor color,
+  }) async {
+    try {
+      await _repo.addHighlightToMessage(
+        conversationId: conversationId,
+        nodeId: nodeId,
+        messageId: messageId,
+        selectedText: selectedText,
+        startOffset: startOffset,
+        endOffset: endOffset,
+        color: color,
+      );
+      _refreshActiveNode();
+      _ref.read(conversationsProvider.notifier).refresh();
+      state = state.copyWith(error: null);
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to add highlight: $e');
+    }
+  }
+
+  Future<void> removeHighlight({
+    required String nodeId,
+    required String messageId,
+    required String highlightId,
+  }) async {
+    await _repo.removeHighlightFromMessage(
+      conversationId: conversationId,
+      nodeId: nodeId,
+      messageId: messageId,
+      highlightId: highlightId,
+    );
+    _refreshActiveNode();
+    _ref.read(conversationsProvider.notifier).refresh();
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
