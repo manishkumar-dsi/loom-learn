@@ -335,6 +335,7 @@ class _ProseBlockState extends State<_ProseBlock> {
       padding: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
       child: SelectionArea(
         magnifierConfiguration: TextMagnifierConfiguration.disabled,
+        selectionControls: MaterialTextSelectionControls(),
         contextMenuBuilder: (ctx, state) {
           Future<String> readSelectedText() async {
             final value = state.textEditingValue;
@@ -370,44 +371,34 @@ class _ProseBlockState extends State<_ProseBlock> {
             );
           }
 
-          final askAiItem = ContextMenuButtonItem(
-            label: 'Ask AI',
-            onPressed: () async {
+          // Anchor position for the floating toolbar
+          final anchors = state.contextMenuAnchors;
+          final primaryAnchor = anchors.primaryAnchor;
+
+          return _KindleContextMenu(
+            anchor: primaryAnchor,
+            theme: widget.theme,
+            onAskAI: () async {
               final value = state.textEditingValue;
               final selected = await readSelectedText();
-
               if (selected.isNotEmpty) {
                 ContextMenuController.removeAny();
-                final start = value.selection.start;
-                final end = value.selection.end;
-                widget.onAskAI?.call(selected, start, end, widget.messageId);
+                widget.onAskAI?.call(
+                  selected,
+                  value.selection.start,
+                  value.selection.end,
+                  widget.messageId,
+                );
               }
             },
-          );
-          final highlightItems = <ContextMenuButtonItem>[
-            ContextMenuButtonItem(
-              label: 'Highlight Yellow',
-              onPressed: () => emitHighlight(HighlightColor.yellow),
-            ),
-            ContextMenuButtonItem(
-              label: 'Highlight Green',
-              onPressed: () => emitHighlight(HighlightColor.green),
-            ),
-            ContextMenuButtonItem(
-              label: 'Highlight Pink',
-              onPressed: () => emitHighlight(HighlightColor.pink),
-            ),
-          ];
-          // Exclude platform AI items (Ask ChatGPT, Ask Claude, etc.) so we only show our "Ask AI"
-          final standardItems = state.contextMenuButtonItems.where((item) {
-            final label = item.label?.toLowerCase() ?? '';
-            return !label.contains('chatgpt') &&
-                !label.contains('claude') &&
-                !label.contains('gemini');
-          }).toList();
-          return AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: state.contextMenuAnchors,
-            buttonItems: [askAiItem, ...highlightItems, ...standardItems],
+            onCopy: () async {
+              final selected = await readSelectedText();
+              if (selected.isNotEmpty) {
+                await Clipboard.setData(ClipboardData(text: selected));
+              }
+              ContextMenuController.removeAny();
+            },
+            onHighlight: emitHighlight,
           );
         },
         child: MarkdownBody(
@@ -462,6 +453,7 @@ class _ProseBlockState extends State<_ProseBlock> {
       // ── Paragraph ────────────────────────────────────────────────────────
       p: base,
       pPadding: EdgeInsets.only(bottom: settings.fontSize * 0.8),
+      textAlign: WrapAlignment.spaceBetween,
 
       // ── Headings ─────────────────────────────────────────────────────────
       h1: base.copyWith(
@@ -605,9 +597,264 @@ class _ProseBlockState extends State<_ProseBlock> {
   }
 }
 
+// ── Kindle-style Context Menu ──────────────────────────────────────────────────
+
+/// A Kindle-inspired floating context menu with two states:
+/// 1. Main toolbar: Highlight (colored dot) | Ask AI | Copy
+/// 2. Color picker: ← back | Aqua | Pink | Orange | Yellow | Green
+class _KindleContextMenu extends StatefulWidget {
+  final Offset anchor;
+  final ReadingThemeData theme;
+  final VoidCallback onAskAI;
+  final VoidCallback onCopy;
+  final void Function(HighlightColor color) onHighlight;
+
+  const _KindleContextMenu({
+    required this.anchor,
+    required this.theme,
+    required this.onAskAI,
+    required this.onCopy,
+    required this.onHighlight,
+  });
+
+  @override
+  State<_KindleContextMenu> createState() => _KindleContextMenuState();
+}
+
+class _KindleContextMenuState extends State<_KindleContextMenu>
+    with SingleTickerProviderStateMixin {
+  bool _showColorPicker = false;
+
+  static const _menuHeight = 56.0;
+  static const _mainMenuWidth = 280.0;
+  static const _colorPickerWidth = 320.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final menuWidth =
+        _showColorPicker ? _colorPickerWidth : _mainMenuWidth;
+
+    // Position above the selection anchor, centered horizontally
+    double left = (widget.anchor.dx - menuWidth / 2).clamp(8.0, screenSize.width - menuWidth - 8);
+    double top = widget.anchor.dy - _menuHeight - 12;
+    if (top < 8) top = widget.anchor.dy + 24; // flip below if no space above
+
+    return Stack(
+      children: [
+        Positioned(
+          left: left,
+          top: top,
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.centerLeft,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                height: _menuHeight,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A2A2E),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      );
+                    },
+                    child: _showColorPicker
+                        ? _buildColorPicker()
+                        : _buildMainToolbar(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainToolbar() {
+    return SizedBox(
+      key: const ValueKey('main'),
+      width: _mainMenuWidth,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Highlight button with colored dot
+          _KindleMenuButton(
+            icon: Icons.circle,
+            iconColor: const Color(0xFFFFBE7A), // Orange dot like Kindle
+            iconSize: 18,
+            label: 'Highlight',
+            onTap: () => setState(() => _showColorPicker = true),
+          ),
+          _menuDivider(),
+          // Ask AI
+          _KindleMenuButton(
+            icon: Icons.auto_awesome_rounded,
+            iconColor: widget.theme.accentLight,
+            label: 'Ask AI',
+            onTap: widget.onAskAI,
+          ),
+          _menuDivider(),
+          // Copy
+          _KindleMenuButton(
+            icon: Icons.content_copy_rounded,
+            iconColor: const Color(0xFFAAAAAA),
+            label: 'Copy',
+            onTap: widget.onCopy,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorPicker() {
+    const colors = <(HighlightColor, String, Color)>[
+      (HighlightColor.aqua, 'Aqua', Color(0xFF8BE8E0)),
+      (HighlightColor.pink, 'Pink', Color(0xFFF9B3E5)),
+      (HighlightColor.orange, 'Orange', Color(0xFFFFBE7A)),
+      (HighlightColor.yellow, 'Yellow', Color(0xFFFFE07A)),
+      (HighlightColor.green, 'Green', Color(0xFFB9F08F)),
+    ];
+
+    return SizedBox(
+      key: const ValueKey('colors'),
+      width: _colorPickerWidth,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Back arrow
+          InkWell(
+            onTap: () => setState(() => _showColorPicker = false),
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 44,
+              height: _menuHeight,
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: Color(0xFFAAAAAA),
+                size: 20,
+              ),
+            ),
+          ),
+          // Color circles
+          ...colors.map((entry) {
+            final (color, label, displayColor) = entry;
+            return Expanded(
+              child: InkWell(
+                onTap: () => widget.onHighlight(color),
+                borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: displayColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Color(0xFFCCCCCC),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuDivider() {
+    return Container(
+      width: 0.5,
+      height: 28,
+      color: const Color(0xFF444448),
+    );
+  }
+}
+
+/// A single button in the Kindle context menu toolbar.
+class _KindleMenuButton extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final double iconSize;
+  final String label;
+  final VoidCallback onTap;
+
+  const _KindleMenuButton({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.onTap,
+    this.iconSize = 16,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: _KindleContextMenuState._menuHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: iconSize, color: iconColor),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFFCCCCCC),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HighlightInlineSyntax extends md.InlineSyntax {
   _HighlightInlineSyntax()
-      : super(r'\[\[hl:(yellow|green|pink):([^\]]+)\]\](.*?)\[\[/hl\]\]');
+      : super(r'\[\[hl:(yellow|green|pink|aqua|orange):([^\]]+)\]\](.*?)\[\[/hl\]\]');
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -638,6 +885,8 @@ class _HighlightBuilder extends MarkdownElementBuilder {
     final hlColor = switch (colorName) {
       'green' => theme.highlightColor(HighlightColor.green),
       'pink' => theme.highlightColor(HighlightColor.pink),
+      'aqua' => theme.highlightColor(HighlightColor.aqua),
+      'orange' => theme.highlightColor(HighlightColor.orange),
       _ => theme.highlightColor(HighlightColor.yellow),
     };
     final isFlashing = flashHighlightId != null && flashHighlightId == id;

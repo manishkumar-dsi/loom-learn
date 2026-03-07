@@ -1,12 +1,16 @@
 enum HighlightColor {
   yellow,
   green,
-  pink;
+  pink,
+  aqua,
+  orange;
 
   String get label => switch (this) {
         yellow => 'Yellow',
         green => 'Green',
         pink => 'Pink',
+        aqua => 'Aqua',
+        orange => 'Orange',
       };
 }
 
