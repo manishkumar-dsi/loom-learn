@@ -626,8 +626,10 @@ class _KindleContextMenuState extends State<_KindleContextMenu>
   bool _showColorPicker = false;
 
   static const _menuHeight = 56.0;
+  static const _caretHeight = 8.0;
   static const _mainMenuWidth = 280.0;
   static const _colorPickerWidth = 320.0;
+  static const _menuBg = Color(0xFF2A2A2E);
 
   @override
   Widget build(BuildContext context) {
@@ -636,9 +638,18 @@ class _KindleContextMenuState extends State<_KindleContextMenu>
         _showColorPicker ? _colorPickerWidth : _mainMenuWidth;
 
     // Position above the selection anchor, centered horizontally
-    double left = (widget.anchor.dx - menuWidth / 2).clamp(8.0, screenSize.width - menuWidth - 8);
-    double top = widget.anchor.dy - _menuHeight - 12;
-    if (top < 8) top = widget.anchor.dy + 24; // flip below if no space above
+    double left = (widget.anchor.dx - menuWidth / 2)
+        .clamp(8.0, screenSize.width - menuWidth - 8);
+    double top = widget.anchor.dy - _menuHeight - _caretHeight - 8;
+    bool showAbove = true;
+    if (top < 8) {
+      top = widget.anchor.dy + 24;
+      showAbove = false;
+    }
+
+    // Arrow position relative to the menu's left edge
+    final arrowLeft =
+        (widget.anchor.dx - left).clamp(16.0, menuWidth - 16.0);
 
     return Stack(
       children: [
@@ -651,46 +662,76 @@ class _KindleContextMenuState extends State<_KindleContextMenu>
             alignment: Alignment.centerLeft,
             child: Material(
               color: Colors.transparent,
-              child: Container(
-                height: _menuHeight,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2E),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Upward caret when menu is below selection
+                  if (!showAbove)
+                    _buildCaret(arrowLeft, menuWidth, pointsUp: true),
+
+                  // Menu body
+                  Container(
+                    height: _menuHeight,
+                    decoration: BoxDecoration(
+                      color: _menuBg,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
                     ),
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        },
+                        child: _showColorPicker
+                            ? _buildColorPicker()
+                            : _buildMainToolbar(),
+                      ),
                     ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    switchInCurve: Curves.easeOut,
-                    switchOutCurve: Curves.easeIn,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      );
-                    },
-                    child: _showColorPicker
-                        ? _buildColorPicker()
-                        : _buildMainToolbar(),
                   ),
-                ),
+
+                  // Downward caret when menu is above selection
+                  if (showAbove)
+                    _buildCaret(arrowLeft, menuWidth, pointsUp: false),
+                ],
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  /// Renders a small triangular caret pointing toward the selected text.
+  Widget _buildCaret(double arrowLeft, double menuWidth,
+      {required bool pointsUp}) {
+    return SizedBox(
+      width: menuWidth,
+      height: _caretHeight,
+      child: CustomPaint(
+        painter: _CaretPainter(
+          color: _menuBg,
+          arrowX: arrowLeft,
+          pointsUp: pointsUp,
+        ),
+      ),
     );
   }
 
@@ -850,6 +891,44 @@ class _KindleMenuButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Paints a small triangle (caret) pointing at the selected text.
+class _CaretPainter extends CustomPainter {
+  final Color color;
+  final double arrowX;
+  final bool pointsUp;
+
+  _CaretPainter({
+    required this.color,
+    required this.arrowX,
+    required this.pointsUp,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const halfWidth = 8.0;
+    final paint = Paint()..color = color;
+    final path = Path();
+
+    if (pointsUp) {
+      path.moveTo(arrowX - halfWidth, size.height);
+      path.lineTo(arrowX, 0);
+      path.lineTo(arrowX + halfWidth, size.height);
+    } else {
+      path.moveTo(arrowX - halfWidth, 0);
+      path.lineTo(arrowX, size.height);
+      path.lineTo(arrowX + halfWidth, 0);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_CaretPainter oldDelegate) =>
+      oldDelegate.arrowX != arrowX ||
+      oldDelegate.pointsUp != pointsUp ||
+      oldDelegate.color != color;
 }
 
 class _HighlightInlineSyntax extends md.InlineSyntax {

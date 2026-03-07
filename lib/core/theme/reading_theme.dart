@@ -343,6 +343,11 @@ class ReadingThemeData {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: accent,
+        selectionColor: const Color(0xFF3A7BD5).withValues(alpha: 0.45),
+        selectionHandleColor: const Color(0xFF3A7BD5),
+      ),
       dialogBackgroundColor: surfaceElevated,
       dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
       scrollbarTheme: ScrollbarThemeData(
