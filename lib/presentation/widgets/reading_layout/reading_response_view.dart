@@ -124,14 +124,6 @@ class ReadingResponseView extends StatelessWidget {
             onTap: (nodeId) => onLinkTap?.call(nodeId),
           ),
 
-        if (message.highlights.isNotEmpty)
-          _HighlightChips(
-            highlights: message.highlights,
-            theme: theme,
-            horizontalMargin: horizontalMargin,
-            flashHighlightId: flashHighlightId,
-          ),
-
         // ── Section divider ────────────────────────────────────────────────
         _SectionDivider(theme: theme, margin: horizontalMargin),
       ],
@@ -951,41 +943,44 @@ class _HighlightBuilder extends MarkdownElementBuilder {
   final ReadingThemeData theme;
   final String? flashHighlightId;
 
+  // Captured from the parent element in visitElementBefore so that
+  // visitText can apply the correct highlight colour inline.
+  String _currentColor = 'yellow';
+  String _currentId = '';
+
   _HighlightBuilder({
     required this.theme,
     required this.flashHighlightId,
   });
 
   @override
-  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
-    final colorName = element.attributes['color'] ?? 'yellow';
-    final id = element.attributes['id'] ?? '';
-    final hlColor = switch (colorName) {
+  void visitElementBefore(md.Element element) {
+    _currentColor = element.attributes['color'] ?? 'yellow';
+    _currentId = element.attributes['id'] ?? '';
+  }
+
+  @override
+  TextSpan? visitText(md.Text text, TextStyle? preferredStyle) {
+    final hlColor = switch (_currentColor) {
       'green' => theme.highlightColor(HighlightColor.green),
       'pink' => theme.highlightColor(HighlightColor.pink),
       'aqua' => theme.highlightColor(HighlightColor.aqua),
       'orange' => theme.highlightColor(HighlightColor.orange),
       _ => theme.highlightColor(HighlightColor.yellow),
     };
-    final isFlashing = flashHighlightId != null && flashHighlightId == id;
+    final isFlashing =
+        flashHighlightId != null && flashHighlightId == _currentId;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      decoration: BoxDecoration(
-        color: hlColor.withValues(
+    return TextSpan(
+      text: text.textContent,
+      style: (preferredStyle ?? const TextStyle()).copyWith(
+        backgroundColor: hlColor.withValues(
           alpha: isFlashing
               ? (theme.isDark ? 0.92 : 0.98)
               : (theme.isDark ? 0.6 : 0.72),
         ),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        element.textContent,
-        style: (preferredStyle ?? const TextStyle()).copyWith(
-          color: theme.textPrimary,
-          fontWeight: isFlashing ? FontWeight.w600 : FontWeight.w500,
-        ),
+        color: theme.textPrimary,
+        fontWeight: isFlashing ? FontWeight.w600 : FontWeight.w500,
       ),
     );
   }
@@ -1244,75 +1239,6 @@ class _ExplorationChips extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HighlightChips extends StatelessWidget {
-  final List<TextHighlight> highlights;
-  final ReadingThemeData theme;
-  final double horizontalMargin;
-  final String? flashHighlightId;
-
-  const _HighlightChips({
-    required this.highlights,
-    required this.theme,
-    required this.horizontalMargin,
-    this.flashHighlightId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(horizontalMargin, 8, horizontalMargin, 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'HIGHLIGHTS',
-            style: TextStyle(
-              color: theme.textMuted,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: highlights.map((h) {
-              final bg = theme.highlightColor(h.color);
-              final isFlashing = flashHighlightId == h.id;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: bg.withValues(
-                    alpha: isFlashing
-                        ? (theme.isDark ? 0.85 : 0.95)
-                        : (theme.isDark ? 0.55 : 0.7),
-                  ),
-                  borderRadius: BorderRadius.circular(isFlashing ? 10 : 14),
-                  border: Border.all(
-                    color: bg.withValues(alpha: isFlashing ? 1 : 0.8),
-                    width: isFlashing ? 1.6 : 1,
-                  ),
-                ),
-                child: Text(
-                  h.selectedText.length > 42
-                      ? '${h.selectedText.substring(0, 41)}…'
-                      : h.selectedText,
-                  style: TextStyle(
-                    color: theme.textPrimary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               );
