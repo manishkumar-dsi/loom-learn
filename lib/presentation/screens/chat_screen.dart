@@ -219,15 +219,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                     );
                                     if (!mounted) return;
                                     _scrollToBottom();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Highlighted in ${color.label}',
+                                    final hlColor = rt.highlightColor(color);
+                                    ScaffoldMessenger.of(context)
+                                      ..clearSnackBars()
+                                      ..showSnackBar(
+                                        SnackBar(
+                                          content: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                width: 14,
+                                                height: 14,
+                                                decoration: BoxDecoration(
+                                                  color: hlColor,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Text(
+                                                'Highlighted in ${color.label}',
+                                                style: TextStyle(
+                                                  color: rt.textPrimary,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          duration:
+                                              const Duration(milliseconds: 1200),
+                                          backgroundColor: rt.surfaceElevated,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            side: BorderSide(
+                                              color: hlColor
+                                                  .withValues(alpha: 0.5),
+                                            ),
+                                          ),
+                                          margin: const EdgeInsets.fromLTRB(
+                                              24, 0, 24, 32),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 12),
+                                          dismissDirection:
+                                              DismissDirection.down,
                                         ),
-                                        duration: const Duration(milliseconds: 900),
-                                        backgroundColor: rt.surfaceElevated,
-                                      ),
-                                    );
+                                      );
                                   },
                                   keyForMessageId: _keyForMessage,
                                   flashHighlightId: _flashHighlightId,

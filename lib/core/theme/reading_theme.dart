@@ -58,6 +58,8 @@ class ReadingThemeData {
   final Color highlightYellow;
   final Color highlightGreen;
   final Color highlightPink;
+  final Color highlightAqua;
+  final Color highlightOrange;
 
   /// True for dark / night themes (affects system overlay style, icon colors).
   final bool isDark;
@@ -93,6 +95,8 @@ class ReadingThemeData {
     required this.highlightYellow,
     required this.highlightGreen,
     required this.highlightPink,
+    required this.highlightAqua,
+    required this.highlightOrange,
     required this.isDark,
     required this.systemOverlayStyle,
   });
@@ -137,6 +141,8 @@ class ReadingThemeData {
     highlightYellow: Color(0xFFFFE07A),
     highlightGreen: Color(0xFFB9F08F),
     highlightPink: Color(0xFFF9B3E5),
+    highlightAqua: Color(0xFF8BE8E0),
+    highlightOrange: Color(0xFFFFBE7A),
     isDark: false,
     systemOverlayStyle: SystemUiOverlayStyle.dark,
   );
@@ -170,6 +176,8 @@ class ReadingThemeData {
     highlightYellow: Color(0xFFF1D168),
     highlightGreen: Color(0xFFBFD67A),
     highlightPink: Color(0xFFE7AFCC),
+    highlightAqua: Color(0xFF7ECAC2),
+    highlightOrange: Color(0xFFE8A85E),
     isDark: false,
     systemOverlayStyle: SystemUiOverlayStyle.dark,
   );
@@ -203,6 +211,8 @@ class ReadingThemeData {
     highlightYellow: Color(0xFF8A6A1F),
     highlightGreen: Color(0xFF295C34),
     highlightPink: Color(0xFF6A3358),
+    highlightAqua: Color(0xFF1F6B63),
+    highlightOrange: Color(0xFF8A5A1F),
     isDark: true,
     systemOverlayStyle: SystemUiOverlayStyle.light,
   );
@@ -236,6 +246,8 @@ class ReadingThemeData {
     highlightYellow: Color(0xFF6E5317),
     highlightGreen: Color(0xFF1E4A2A),
     highlightPink: Color(0xFF552947),
+    highlightAqua: Color(0xFF175550),
+    highlightOrange: Color(0xFF6E4517),
     isDark: true,
     systemOverlayStyle: SystemUiOverlayStyle.light,
   );
@@ -253,6 +265,8 @@ class ReadingThemeData {
         HighlightColor.yellow => highlightYellow,
         HighlightColor.green => highlightGreen,
         HighlightColor.pink => highlightPink,
+        HighlightColor.aqua => highlightAqua,
+        HighlightColor.orange => highlightOrange,
       };
 
   // ── MaterialApp ThemeData bridge ──────────────────────────────────────────
@@ -328,6 +342,11 @@ class ReadingThemeData {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: accent,
+        selectionColor: const Color(0xFF3A7BD5).withValues(alpha: 0.45),
+        selectionHandleColor: const Color(0xFF3A7BD5),
       ),
       dialogBackgroundColor: surfaceElevated,
       dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
