@@ -5,8 +5,7 @@ import 'storage_provider.dart';
 
 /// Default API key used when none is saved in storage. Set your key here
 /// (avoid committing real keys to version control).
-const String kDefaultApiKey =
-    '';
+const String kDefaultApiKey = '';
 
 // ── Settings state ─────────────────────────────────────────────────────────
 

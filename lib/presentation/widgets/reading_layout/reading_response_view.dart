@@ -335,7 +335,6 @@ class _ProseBlockState extends State<_ProseBlock> {
       padding: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
       child: SelectionArea(
         magnifierConfiguration: TextMagnifierConfiguration.disabled,
-        selectionControls: MaterialTextSelectionControls(),
         contextMenuBuilder: (ctx, state) {
           Future<String> readSelectedText() async {
             final value = state.textEditingValue;
